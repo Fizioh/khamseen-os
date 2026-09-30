@@ -1,0 +1,42 @@
+name: Bug report
+description: Incorrect docs, broken links, or misleading status in this repository
+title: "[bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        For **security** issues, do not use this form — see [SECURITY.md](https://github.com/Fizioh/khamseen-os/blob/main/SECURITY.md).
+
+  - type: textarea
+    id: description
+    attributes:
+      label: What is wrong?
+      description: Include file paths or URLs on github.com/Fizioh/khamseen-os
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce (if applicable)
+      placeholder: e.g. open docs/getting-started.md link X
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Documentation
+        - Architecture / contracts
+        - CI / tooling (when present)
+        - Other
+    validations:
+      required: true

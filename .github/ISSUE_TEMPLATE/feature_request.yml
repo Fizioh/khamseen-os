@@ -1,0 +1,42 @@
+name: Proposal
+description: Suggest a contract change, doc improvement, or open-core capability
+title: "[proposal]: "
+labels: ["proposal"]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What gap does this address for contributors or integrators?
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed change
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Verifiable outcomes (docs merged, tests pass, ADR accepted, etc.)
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: scope
+    attributes:
+      label: Scope check
+      options:
+        - label: This stays within public open-core boundaries (no client secrets / proprietary modules)
+          required: true
+        - label: I understand experimental alpha APIs may change
+          required: true
