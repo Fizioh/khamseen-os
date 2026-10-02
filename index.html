@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Senior Mission 2027 — Diagnostic 360</title>
+<meta name="description" content="Diagnostic senior Full-Stack, GIS, architecture, production et communication.">
+<link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+<div class="app">
+<aside>
+  <div class="brand">Senior Mission 2027</div>
+  <div class="sub">Diagnostic 360 · Full‑Stack / GIS / Architecture</div>
+  <div class="progress"><div id="bar"></div></div>
+  <div class="stats"><span id="pct">0%</span><span id="save-state">local</span></div>
+  <nav id="nav"></nav>
+  <button class="ghost wide" id="export-side">Exporter</button>
+</aside>
+<main>
+<section class="screen active" data-id="intro">
+  <div class="hero">
+    <span class="eyebrow">DIAGNOSTIC 360</span>
+    <h1>Mesurer ton niveau réel,<br>pas ton niveau perçu.</h1>
+    <p>Un hiring loop senior en 10 modules : code, codebase, backend, architecture, production, IA, GIS et communication.</p>
+    <div class="metrics">
+      <div><strong>10</strong><span>modules</span></div>
+      <div><strong>~4h30</strong><span>2–3 sessions</span></div>
+      <div><strong>100</strong><span>points après review</span></div>
+    </div>
+  </div>
+  <div class="card">
+    <h2>Règles</h2>
+    <ul>
+      <li>Les modules « Sans IA » se font sans ChatGPT, Cursor, Google ou documentation.</li>
+      <li>Écris ton raisonnement, pas seulement une réponse finale.</li>
+      <li>Les réponses sont sauvegardées localement dans le navigateur.</li>
+      <li>À la fin, exporte le JSON et renvoie-le dans ChatGPT pour correction.</li>
+    </ul>
+    <label>Nom du run</label>
+    <input data-key="runName" placeholder="Diagnostic 02/10/2026">
+    <div class="actions right"><button class="primary" data-go="coding">Commencer →</button></div>
+  </div>
+</section>
+
+<section class="screen" data-id="coding">
+  <header class="module-head"><span class="pill">01 · Coding · Sans IA · 10 pts</span><div class="timer" data-timer="coding">30:00</div></header>
+  <div class="card"><h2>Rate limiting / sliding window</h2>
+    <div class="prompt">Écris <b>detectBursts(events, windowSeconds, threshold)</b> pour détecter les utilisateurs ayant au moins <b>threshold</b> requêtes dans n’importe quelle fenêtre glissante. Jusqu’à 1 000 000 événements triés par timestamp.</div>
+    <label>Raisonnement + complexité</label><textarea data-key="coding_reasoning"></textarea>
+    <label>Code</label><textarea class="code" data-key="coding_code"></textarea>
+    <label>Cas limites</label><textarea data-key="coding_edges"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="intro">← Retour</button><button class="primary complete" data-complete="coding" data-next="react">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="react">
+  <header class="module-head"><span class="pill">02 · React / TypeScript · Sans IA · 10 pts</span><div class="timer" data-timer="react">35:00</div></header>
+  <div class="card"><h2>Race condition dans une Search UI</h2>
+    <div class="prompt">La requête B revient avant A ; ensuite A revient et remplace l’UI avec un ancien résultat. Explique le bug et corrige-le proprement.</div>
+    <label>Diagnostic</label><textarea data-key="react_diag"></textarea>
+    <label>Implémentation / pseudo-code</label><textarea class="code" data-key="react_code"></textarea>
+    <label>Quand useMemo/useCallback sont-ils inutiles ?</label><textarea data-key="react_q1"></textarea>
+    <label>Qu’est-ce qu’une stale closure ?</label><textarea data-key="react_q2"></textarea>
+    <label>type vs interface : comment choisis-tu ?</label><textarea data-key="react_q3"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="coding">← Retour</button><button class="primary complete" data-complete="react" data-next="backend">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="backend">
+  <header class="module-head"><span class="pill">03 · Django / SQL · Sans IA · 15 pts</span><div class="timer" data-timer="backend">45:00</div></header>
+  <div class="card"><h2>API devenue lente</h2>
+    <div class="prompt"><b>GET /projects/:id/routes</b> est passé de 350 ms à 4.2 s. DB CPU élevée, payload quasi inchangé. Le serializer touche <code>owner.name</code>, <code>system.region.name</code> et <code>crossings.count()</code>.</div>
+    <label>Plan de diagnostic</label><textarea data-key="backend_plan"></textarea>
+    <label>Hypothèses classées</label><textarea data-key="backend_hyp"></textarea>
+    <label>Correctifs ORM / DB</label><textarea data-key="backend_fix"></textarea>
+    <label>SQL : dernier événement par route</label><textarea class="code" data-key="backend_sql"></textarea>
+    <label>Tests / validation perf</label><textarea data-key="backend_tests"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="react">← Retour</button><button class="primary complete" data-complete="backend" data-next="codebase">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="codebase">
+  <header class="module-head"><span class="pill">04 · Codebase Review · Sans IA · 15 pts</span><div class="timer" data-timer="codebase">45:00</div></header>
+  <div class="card"><h2>Review ciblée</h2>
+    <div class="prompt">Ne corrige pas « tout ce qui semble moche ». Identifie les problèmes à impact réel, leur gravité et comment tu les vérifierais.</div>
+    <label>Django</label><textarea class="code preset" data-key="codebase_a">def list_routes(project_id):
+    qs = Route.objects.filter(project_id=project_id)
+    return [{"id": r.id, "owner": r.owner.name, "region": r.system.region.name, "crossings": r.crossings.count()} for r in qs]</textarea>
+    <label>React</label><textarea class="code preset" data-key="codebase_b">useEffect(() => {
+  fetch(`/api/search?q=${query}`)
+    .then(r => r.json())
+    .then(setResults)
+}, [query])</textarea>
+    <label>Review : problèmes, gravité, vérification, fix minimal</label><textarea data-key="codebase_review"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="backend">← Retour</button><button class="primary complete" data-complete="codebase" data-next="system">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="system">
+  <header class="module-head"><span class="pill">05 · System Design · Sans IA · 15 pts</span><div class="timer" data-timer="system">60:00</div></header>
+  <div class="card"><h2>Global Geospatial Monitoring Platform</h2>
+    <div class="prompt">Plateforme multi-tenant : 10 M d’assets, positions quasi temps réel, historique, alertes, Europe + Middle East.</div>
+    <label>Requirements</label><textarea data-key="system_req"></textarea>
+    <label>Architecture</label><textarea data-key="system_arch"></textarea>
+    <label>Data model / storage</label><textarea data-key="system_data"></textarea>
+    <label>Scale / partitioning / cache</label><textarea data-key="system_scale"></textarea>
+    <label>Failure modes / resilience</label><textarea data-key="system_fail"></textarea>
+    <label>Trade-offs</label><textarea data-key="system_trade"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="codebase">← Retour</button><button class="primary complete" data-complete="system" data-next="incident">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="incident">
+  <header class="module-head"><span class="pill">06 · Production Incident · Sans IA · 10 pts</span><div class="timer" data-timer="incident">30:00</div></header>
+  <div class="card"><h2>Tu es owner du service</h2>
+    <div class="prompt">14:02 deploy · 14:07 p95 220 ms → 4.6 s · 14:10 DB connections 80% · 14:13 error rate 0.2% → 5%.</div>
+    <label>Premières 10 minutes</label><textarea data-key="incident_first"></textarea>
+    <button class="ghost reveal-btn" data-reveal="r1">Révéler indice #1</button><div id="r1" class="reveal">Trafic stable. Les erreurs sont surtout des timeouts DB.</div>
+    <label>Suite du diagnostic</label><textarea data-key="incident_second"></textarea>
+    <button class="ghost reveal-btn" data-reveal="r2">Révéler indice #2</button><div id="r2" class="reveal">Le diff ajoute un calcul de permissions dans une boucle et une requête ORM par item.</div>
+    <label>Mitigation + fix durable + validation</label><textarea data-key="incident_final"></textarea>
+    <label>Postmortem</label><textarea data-key="incident_post"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="system">← Retour</button><button class="primary complete" data-complete="incident" data-next="ai">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="ai">
+  <header class="module-head"><span class="pill">07 · AI Engineering · IA autorisée · 10 pts</span><div class="timer" data-timer="ai">40:00</div></header>
+  <div class="card"><h2>Review d’un patch généré par agent</h2>
+    <textarea class="code preset" data-key="ai_patch">def process_payment(task):
+    payment = Payment.objects.get(id=task.payment_id)
+    result = provider.charge(payment.customer_id, payment.amount)
+    payment.status = "paid"
+    payment.provider_id = result.id
+    payment.save()
+    task.status = "done"
+    task.save()</textarea>
+    <label>Risques / failure modes</label><textarea data-key="ai_risks"></textarea>
+    <label>Plan de correction</label><textarea data-key="ai_fix"></textarea>
+    <label>Tests avant merge</label><textarea data-key="ai_tests"></textarea>
+    <label>Comment utiliserais-tu l’IA pendant la review ?</label><textarea data-key="ai_process"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="incident">← Retour</button><button class="primary complete" data-complete="ai" data-next="gis">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="gis">
+  <header class="module-head"><span class="pill">08 · GIS Architecture · Sans IA · 5 pts</span><div class="timer" data-timer="gis">20:00</div></header>
+  <div class="card"><h2>5 millions de features</h2>
+    <div class="prompt">Le PM propose : « On renvoie tout depuis Django et on affiche tout dans le navigateur. » Réponds comme le senior responsable de l’architecture.</div>
+    <label>Réponse + architecture</label><textarea data-key="gis_answer"></textarea>
+    <label>Bbox, indexes, clustering, vector tiles, généralisation, cache, projections</label><textarea data-key="gis_details"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="ai">← Retour</button><button class="primary complete" data-complete="gis" data-next="communication">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="communication">
+  <header class="module-head"><span class="pill">09 · Senior Communication · 5 pts</span><div class="timer" data-timer="communication">20:00</div></header>
+  <div class="card"><h2>Décision controversée</h2>
+    <div class="prompt">Le CTO propose de remplacer PostgreSQL + Redis par MongoDB « pour simplifier la stack ». Réponds au CTO, pas à un développeur.</div>
+    <label>Ta réponse</label><textarea data-key="comm_answer"></textarea>
+    <label>Dans quelles conditions changerais-tu d’avis ?</label><textarea data-key="comm_reverse"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="gis">← Retour</button><button class="primary complete" data-complete="communication" data-next="english">Terminer →</button></div>
+</section>
+
+<section class="screen" data-id="english">
+  <header class="module-head"><span class="pill">10 · English Technical · 5 pts</span><div class="timer" data-timer="english">15:00</div></header>
+  <div class="card"><h2>English only</h2>
+    <div class="prompt">Tell me about a difficult production issue you diagnosed. Explain the symptoms, hypotheses, evidence, decision, fix, and how you verified the outcome.</div>
+    <label>Your answer</label><textarea data-key="english_answer"></textarea>
+    <label>What alternatives did you consider, and what would you do differently today?</label><textarea data-key="english_follow"></textarea>
+  </div><div class="actions"><button class="ghost" data-go="communication">← Retour</button><button class="primary complete" data-complete="english" data-next="final">Voir le bilan →</button></div>
+</section>
+
+<section class="screen" data-id="final">
+  <div class="hero"><span class="eyebrow">RUN COMPLETE</span><h1>Matière exploitable.</h1><p>Pas d’auto-score artificiel : exporte le run et renvoie-le dans ChatGPT pour une review /100, forces, gaps et plan de remédiation.</p></div>
+  <div class="card"><h2>Auto-évaluation facultative</h2><div id="scorecard" class="scorecard"></div></div>
+  <div class="card"><h2>Export</h2><div class="actions left"><button class="primary" id="export-final">Télécharger le JSON</button><button class="ghost" id="copy-summary">Copier le résumé</button><button class="danger" id="reset">Réinitialiser</button></div></div>
+</section>
+</main></div>
+<script src="./app.js"></script>
+</body></html>
