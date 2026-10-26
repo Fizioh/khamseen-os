@@ -326,7 +326,8 @@ class EngineeringWorkflowRunner:
 
         if result.evidence:
             outcome.evidence.extend(result.evidence)
-        elif emit_default_evidence and result.status == RunStatus.SUCCEEDED:
+        has_stage_evidence = any(ev.kind == default_evidence_kind for ev in result.evidence)
+        if emit_default_evidence and result.status == RunStatus.SUCCEEDED and not has_stage_evidence:
             outcome.evidence.append(
                 Evidence(
                     task_id=task.task_id,
