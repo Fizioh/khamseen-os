@@ -2,10 +2,16 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 import tomllib
 from pathlib import Path
 
 _REPO_ROOT = Path(__file__).resolve().parents[1]
+_SRC_DIR = _REPO_ROOT / "src"
+if str(_SRC_DIR) not in sys.path:
+    sys.path.insert(0, str(_SRC_DIR))
+
+from khamseen_os.manifest import ManifestValidationError, load_and_validate_manifest
 
 _MD_LINK_RE = re.compile(r"\[[^\]]+\]\(([^)]+)\)")
 _FENCED_BLOCK_RE = re.compile(r"```[\s\S]*?```")
@@ -133,11 +139,28 @@ def check_secrets(files: list[Path]) -> list[str]:
     return errors
 
 
+def check_manifests() -> list[str]:
+    errors: list[str] = []
+    manifest_path = _REPO_ROOT / "examples" / "engineering-loop" / "module-manifest.json"
+    schema_path = _REPO_ROOT / "schemas" / "module-manifest.schema.json"
+    if not schema_path.is_file():
+        errors.append("Missing schemas/module-manifest.schema.json")
+    if not manifest_path.is_file():
+        errors.append("Missing examples/engineering-loop/module-manifest.json")
+        return errors
+    try:
+        load_and_validate_manifest(manifest_path)
+    except ManifestValidationError as exc:
+        errors.append(f"Example module manifest validation failed: {exc}")
+    return errors
+
+
 def main() -> int:
     files = _tracked_files()
     errors: list[str] = []
     errors.extend(check_license())
     errors.extend(check_dependency_hygiene())
+    errors.extend(check_manifests())
     errors.extend(check_markdown_links(files))
     errors.extend(check_secrets(files))
 
