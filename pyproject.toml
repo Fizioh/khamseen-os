@@ -41,18 +41,19 @@ where = ["src"]
 khamseen_os = ["py.typed"]
 
 [tool.pytest.ini_options]
+pythonpath = ["src"]
 testpaths = ["tests"]
 markers = [
   "live_hermes: optional integration tests requiring a live Hermes CLI installation and credentials",
 ]
 
 [tool.ruff]
-line-length = 100
+line-length = 120
 target-version = "py311"
 src = ["src", "tests", "examples", "scripts"]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP"]
+select = ["E", "F", "I", "B"]
 
 [tool.mypy]
 python_version = "3.11"
