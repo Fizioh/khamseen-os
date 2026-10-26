@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from khamseen_os.conformance import (
+    ConformanceCaseResult,
+    ConformanceReport,
+    ProviderConformanceHarness,
+)
 from khamseen_os.contracts import (
     ApprovalRecord,
     ApprovalStatus,
@@ -44,6 +49,8 @@ __all__ = [
     "ApprovalStatus",
     "AuditEvent",
     "BudgetSpec",
+    "ConformanceCaseResult",
+    "ConformanceReport",
     "EngineeringWorkflowRunner",
     "Evidence",
     "EvidenceKind",
@@ -55,6 +62,7 @@ __all__ = [
     "PolicyDecision",
     "PolicyEngine",
     "PolicyEvaluation",
+    "ProviderConformanceHarness",
     "Run",
     "RunStatus",
     "RuntimeProvider",
