@@ -1,5 +1,5 @@
 name: Bug report
-description: Incorrect docs, broken links, or misleading status in this repository
+description: Report a bug in khamseen_os contracts, policy guards, adapters, examples, or docs
 title: "[bug]: "
 labels: ["bug"]
 body:
@@ -11,8 +11,8 @@ body:
   - type: textarea
     id: description
     attributes:
-      label: What is wrong?
-      description: Include file paths or URLs on github.com/Fizioh/khamseen-os
+      label: What happened?
+      description: Include file paths, function names, or error tracebacks.
     validations:
       required: true
 
@@ -26,17 +26,20 @@ body:
   - type: textarea
     id: repro
     attributes:
-      label: Steps to reproduce (if applicable)
-      placeholder: e.g. open docs/getting-started.md link X
+      label: Steps or pytest command to reproduce
+      placeholder: e.g. pytest tests/test_contracts_and_policy.py -k test_name
+    validations:
+      required: true
 
   - type: dropdown
     id: area
     attributes:
       label: Area
       options:
-        - Documentation
-        - Architecture / contracts
-        - CI / tooling (when present)
-        - Other
+        - Core contracts & policy (src/khamseen_os)
+        - Runtime conformance & Hermes adapter
+        - Examples (examples/engineering-loop)
+        - Security & threat model
+        - Documentation / CI
     validations:
       required: true

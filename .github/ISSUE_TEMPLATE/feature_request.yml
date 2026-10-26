@@ -1,13 +1,13 @@
-name: Proposal
-description: Suggest a contract change, doc improvement, or open-core capability
-title: "[proposal]: "
-labels: ["proposal"]
+name: Enhancement / Proposal
+description: Propose a contract improvement, conformance check, security test, or beginner-friendly enhancement
+title: "[feat]: "
+labels: ["enhancement"]
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What gap does this address for contributors or integrators?
+      label: Problem or motivation
+      description: What reliability, policy, conformance, or documentation gap does this address?
     validations:
       required: true
 
@@ -15,28 +15,24 @@ body:
     id: proposal
     attributes:
       label: Proposed change
+      description: Describe the target files (e.g. src/khamseen_os/..., tests/..., docs/...) and behavior.
     validations:
       required: true
 
   - type: textarea
-    id: alternatives
-    attributes:
-      label: Alternatives considered
-
-  - type: textarea
     id: acceptance
     attributes:
-      label: Acceptance criteria
-      description: Verifiable outcomes (docs merged, tests pass, ADR accepted, etc.)
+      label: Acceptance criteria & verification command
+      description: Verifiable outcomes and exact pytest / CLI commands to validate.
     validations:
       required: true
 
   - type: checkboxes
     id: scope
     attributes:
-      label: Scope check
+      label: Guardrails check
       options:
-        - label: This stays within public open-core boundaries (no client secrets / proprietary modules)
+        - label: Requires no private repository access, secrets, or proprietary dependencies
           required: true
-        - label: I understand experimental alpha APIs may change
+        - label: Does not duplicate Hermes Agent or Paperclip functionality
           required: true
