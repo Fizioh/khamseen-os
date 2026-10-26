@@ -1,120 +1,88 @@
 # Architecture
 
-Khamseen OS is a **control plane** for agentic organizations: it records who did what, under which policy, with auditable events and explicit gates — while **domain modules** supply chiefs, skills, tools, and data scopes.
+Khamseen OS is an **open-source reliability and policy layer for autonomous AI agents**. It defines portable execution contracts, enforces bounded autonomy and policy gates, verifies deterministic evidence, and records append-only audit trails around agent runtimes.
 
-This document describes the **target open-core architecture**. The public repository is documentation-first; a private prototype explores implementation details that will be **extracted** incrementally.
+## Reference stack
 
-## Layers
+Khamseen OS operates alongside specialized open-source components without duplicating their responsibilities:
 
-| Layer | Responsibility | Open core? |
-|-------|----------------|------------|
-| **Human authority** | Policy, budgets, final approvals | Contract + APIs |
-| **Control plane** | Task, Run, Event, Tool, Decision, Approval | Yes (target) |
-| **Org / delegation** | Chiefs, roles, escalation | Module-defined |
-| **Execution graph** | Units, dependencies, parallelism, gates | Yes (target) |
-| **Correction loop** | Per-unit produce/check/correct | Bounded by policy |
-| **Providers** | Runtime, context, memory, knowledge, review | Pluggable adapters |
+| Layer | Component | Responsibility | Owned by `khamseen-os`? |
+|-------|-----------|----------------|-------------------------|
+| **Organization & budgets** | **Paperclip** (optional) | Company goals, org hierarchy, budget allocation, high-level delegation | No (external integration via correlation metadata) |
+| **Task coordination** | **Hermes Kanban / GitHub** | Task boards, issue tracking, pull requests, CI | No (linked via `Task.external_ref`) |
+| **Reliability & policy** | **Khamseen OS** | `Task`, `Run`, `Evidence`, `PolicyDecision`, bounded loops, approval gates, conformance tests | **Yes (core package)** |
+| **Agent execution** | **Hermes Agent** | Native tools, skills, session memory, model routing, CLI/ACP execution | No (invoked behind `RuntimeProvider`) |
+| **OS / container isolation** | **External sandbox / container** | Process, filesystem, network, and credential isolation | No (required operational boundary) |
 
-## Core entities (control plane)
+See [ADR-002: Runtime Portability and Hermes Reference Execution Boundary](docs/decisions/ADR-002-runtime-portability.md).
 
-- **Agent** — organizational identity (not a model name).
-- **Task** — requested outcome or unit of work.
-- **Run** — one execution attempt for a task (retries are new runs).
-- **Event** — append-only audit record with correlation id.
-- **Tool / ToolCall** — registered actions and invocations with redacted I/O.
-- **Decision** — recorded judgment (automated or agent-produced summary).
-- **Approval** — human or policy gate state (e.g. pending, approved, rejected).
+## Core primitives
 
-Emerging orchestration concepts (names may stabilize during extraction):
+- **`Task`** — requested outcome, scope constraints, required evidence types, budget limits, and sensitivity flags.
+- **`Run`** — a single bounded execution attempt for a `Task`. Retries always generate a new `Run` record.
+- **`Evidence`** — verifiable artifacts attached to a `Run` (e.g., deterministic test output, static check status, reviewer verdict, structured usage report).
+- **`PolicyDecision`** — deterministic evaluation (`ALLOW`, `DENY`, `HUMAN_REQUIRED`) produced by the policy engine before and after runtime execution.
+- **`RuntimeProvider`** — narrow execution interface implemented by `FakeRuntime` (for deterministic tests) and runtime adapters such as `HermesCliRuntimeAdapter`.
+- **`ExecutionResult`** — normalized runtime output containing status, structured artifacts, verified token/cost usage, error details, and external session correlation.
+- **`Event`** — append-only audit record linking `task_id`, `run_id`, `correlation_id`, stage transitions, policy decisions, and human approvals.
 
-- **Unit** — node in the execution graph.
-- **Gate** — checkpoint (automated, review, human).
-- **Correction edge** — retry/remediation path after failure.
-
-## Delegation org chart vs execution graph
-
-**Org chart** (delegation):
+## Bounded engineering workflow
 
 ```
-Human authority → domain chief → managers → specialists → workers
+REQUEST → IMPLEMENT → CHECK → REVIEW → (REMEDIATE → CHECK → REVIEW)* → QA → (HUMAN_APPROVAL) → DONE
 ```
 
-Defines **who may delegate to whom** and default escalation.
+1. **`REQUEST`**: A scoped `Task` is registered and validated against policy.
+2. **`IMPLEMENT`**: An implementer role executes a `Run` via a `RuntimeProvider`.
+3. **`CHECK`**: Deterministic verification (tests, linting, artifact presence) produces `Evidence`.
+4. **`REVIEW`**: A distinct reviewer role evaluates the implementation and check evidence.
+5. **`REMEDIATE`**: If `CHECK` or `REVIEW` fails, a bounded correction loop spawns a new `Run` up to `max_attempts`, halting early on repeated identical failures or budget exhaustion.
+6. **`QA`**: Final verification confirms all mandatory evidence is present and verified. If mandatory evidence is missing, the workflow **fails closed**.
+7. **`HUMAN_APPROVAL`**: Conditional gate triggered when task policy or sensitive operations return `PolicyDecision.HUMAN_REQUIRED`.
+8. **`DONE` / `FAILED` / `ESCALATED`**: Terminal auditable state.
 
-**Execution graph** (dependencies):
+## Cross-system correlation
 
-```
-Unit A ──┬──► Unit B ──► Gate ──► Human approval
-         └──► Unit C ──► Review agent
-```
+Khamseen OS correlates identifiers across the stack without surrendering lifecycle state ownership:
 
-Defines **order and dependencies**. Prefer parallel fan-out when there is no real data dependency.
+- `Task.external_ref` links to a GitHub issue/PR or Hermes Kanban card.
+- `Task.metadata["external_goal_id"]` optionally links to a Paperclip goal or budget scope.
+- `Run.correlation_id` threads through all Khamseen `Event` and `Evidence` records.
+- `Run.external_run_id` / `ExecutionResult.external_session_id` records the Hermes Agent `session_id` reported by `--usage-file`.
 
-**Loop** (inside one unit):
+## Provider boundary and runtime independence
 
-```
-produce → check → (fail → correct → check)* → pass
-```
+The `RuntimeProvider` protocol isolates Khamseen OS from runtime-specific internals:
 
-Loops are **bounded**; repeated identical failure escalates.
+| Provider | Purpose | Status in `khamseen-os` |
+|----------|---------|-------------------------|
+| **`FakeRuntime`** | Deterministic offline testing of workflows, failure modes, timeouts, and policy gates | Shipped in `khamseen_os` |
+| **Hermes Agent** ([NousResearch/hermes-agent](https://github.com/NousResearch/hermes-agent)) | Reference execution runtime (`hermes --oneshot ... --usage-file ...`) | Typed adapter contract + offline conformance fixtures |
 
-## Lifecycle (target)
+No proprietary IDE harness (Cursor, Cursor Cloud, Grok) or OpenCode dependency is used or permitted as a runtime dependency of `khamseen-os`.
 
-`REQUEST` → `PLAN` → `DELEGATE` → `IMPLEMENT` → `REVIEW` → `REMEDIATE` → `QA` → `HUMAN_APPROVAL` → `DONE`
+## Security and isolation boundary
 
-- **REMEDIATE** is entered after a failed review/check, not on every task.
-- **HUMAN_APPROVAL** is conditional on workflow policy.
+Python policy objects enforce deterministic state machines, retry caps, cost/token budgets, approval gates, and evidence verification. However:
 
-## Provider boundaries
-
-Providers are **replaceable** behind narrow interfaces. The control plane must boot without any single vendor.
-
-| Provider kind | Purpose | Integration status (public repo) |
-|---------------|---------|----------------------------------|
-| **Runtime / harness** | Execute agent work (CLI, HTTP worker, IDE agent) | Spec + prototype evaluation (e.g. Hermes) — not shipped here |
-| **Context** | Assemble prompts/state for a run | Documented contract only |
-| **Memory** | Durable agent/session memory | Documented contract only |
-| **Knowledge** | Retrieval over corpora | Documented contract only |
-| **Review** | Independent verification (tests, diff, policy) | Documented contract only |
-| **Durable execution** | Long-running jobs, checkpoints | Planned |
-
-Candidate tools (Cursor, Codex, Claude Code, OpenClaw, MCP servers) are **integration options** under the runtime/harness boundary — not bundled dependencies of this repository.
-
-## Module boundary
-
-Domain modules attach chiefs, tool catalogs, skills, and data scopes. They must not embed client secrets, production configs, or proprietary business logic in the open core.
-
-See [docs/module-contract.md](docs/module-contract.md).
+- **OS-level process, filesystem, network, and credential isolation must be enforced by an external container, VM, or sandbox runtime.**
+- Runtime adapters must scrub sensitive environment variables before subprocess invocation and redact secret patterns from captured outputs and `Evidence` records.
+- Because scripted CLI invocations (such as `hermes --oneshot`) bypass interactive terminal prompts by design, Khamseen OS enforces `HUMAN_REQUIRED` gates prior to sensitive runtime dispatch.
 
 ## Distinctions (summary)
 
 Full glossary: [docs/concepts.md](docs/concepts.md).
 
 | Term A | Term B | Relationship |
-|--------|--------|----------------|
-| Agent | Model | Agent is identity; model is runtime choice |
-| Task | Run | Task is intent; run is attempt |
-| Capability | Skill | Capability routes work; skill packages behavior |
-| Skill | Tool | Skill composes tools + policy |
-| Graph | Loop | Graph schedules units; loop converges one unit |
-| Context | Memory | Context is assembled per run; memory persists |
-| Review finding | Gate decision | Finding is evidence; gate applies policy |
-| Gate decision | Human approval | Gate may auto-pass; human approval is explicit |
+|--------|--------|--------------|
+| Agent | Model | Agent is role identity; model is runtime configuration |
+| Task | Run | Task is requested outcome; Run is a single attempt |
+| Claim | Evidence | Agent output is a claim; Evidence is a verified artifact |
+| Review finding | Policy decision | Finding is reviewer evidence; Policy decision (`ALLOW`/`DENY`/`HUMAN_REQUIRED`) enforces rules |
+| Policy decision | Human approval | Policy flags `HUMAN_REQUIRED`; a human authority grants or rejects approval |
+| Python policy | OS sandbox | Python enforces workflow contracts; OS/container enforces process and network isolation |
 
-## Public vs private
+## Public vs private boundary
 
-Generic contracts and control-plane core → **this repository**.  
-Client data, production configs, proprietary modules → **private repositories**.
-
-[ADR-001: Public core and private modules](docs/decisions/ADR-001-public-core-private-modules.md)
-
-## What exists where (honest)
-
-| Artifact | `khamseen-os` (public) | Private prototype |
-|----------|------------------------|-------------------|
-| Architecture docs | Yes | Overlapping internal docs |
-| Runnable Django monolith | No | Yes (experimental) |
-| End-to-end domain E2E | No | Partial (orchestration paths exist; external engines often stubbed) |
-| Published Python package | No | No |
-
-Do not infer production readiness from the private prototype alone.
+Generic reliability contracts, policy guards, conformance tests, and synthetic examples live in **this repository** (`khamseen-os`).
+Proprietary business modules, internal configurations, and customer data remain in **private repositories** ([ADR-001](docs/decisions/ADR-001-public-core-private-modules.md)).
