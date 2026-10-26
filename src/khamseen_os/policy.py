@@ -197,12 +197,12 @@ class PolicyEngine:
     ) -> PolicyEvaluation:
         violations: list[str] = []
 
-        if candidate_run.attempt > task.budget.max_attempts:
+        same_stage_runs = [r for r in prior_runs if r.stage == candidate_run.stage]
+        if (
+            candidate_run.attempt > task.budget.max_attempts
+            or len(same_stage_runs) >= task.budget.max_attempts
+        ):
             violations.append("max_attempts_exceeded")
-
-        if len(prior_runs) >= task.budget.max_attempts:
-            if "max_attempts_exceeded" not in violations:
-                violations.append("max_attempts_exceeded")
 
         failure_signatures = [
             f"{r.error_code or 'ERR'}:{r.error_message or ''}"
