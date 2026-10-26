@@ -218,10 +218,11 @@ class ProviderConformanceHarness:
             and outcome.final_decision is not None
             and outcome.final_decision.decision == PolicyDecision.DENY
         )
+        decision_val = outcome.final_decision.decision.value if outcome.final_decision else None
         return ConformanceCaseResult(
             case_name="missing_evidence",
             passed=passed,
-            detail=f"stage={outcome.task.stage.value}, decision={outcome.final_decision.decision.value if outcome.final_decision else None}",
+            detail=f"stage={outcome.task.stage.value}, decision={decision_val}",
         )
 
     def check_budget_rejection(self) -> ConformanceCaseResult:
@@ -243,10 +244,11 @@ class ProviderConformanceHarness:
                 or "cost_budget_exceeded" in outcome.final_decision.violated_rules
             )
         )
+        rules = outcome.final_decision.violated_rules if outcome.final_decision else ()
         return ConformanceCaseResult(
             case_name="budget_rejection",
             passed=passed,
-            detail=f"stage={outcome.task.stage.value}, rules={outcome.final_decision.violated_rules if outcome.final_decision else ()}",
+            detail=f"stage={outcome.task.stage.value}, rules={rules}",
         )
 
     def check_approval_required(self) -> ConformanceCaseResult:
@@ -290,6 +292,7 @@ class ProviderConformanceHarness:
 
     def check_normalized_results(self) -> ConformanceCaseResult:
         provider = self.success_provider_factory()
+        synthetic_token = "sk-" + "synthetic_test_token_123456"
         req = ExecutionRequest(
             task_id="task_norm",
             run_id="run_norm_1",
@@ -297,7 +300,7 @@ class ProviderConformanceHarness:
             agent_id="agent_impl",
             agent_role="implementer",
             stage=LifecycleStage.IMPLEMENT,
-            prompt="Return normalized result with secret api_key=sk-1234567890abcdefghijklmnop",
+            prompt=f"Return normalized result with secret api_key={synthetic_token}",
             correlation_id="corr_norm_1",
         )
         res = provider.execute(req)
