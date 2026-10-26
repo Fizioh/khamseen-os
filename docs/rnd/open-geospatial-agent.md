@@ -18,13 +18,8 @@ Answer bounded natural-language geospatial questions against permitted datasets,
 - Optional MCP tool surface; never grant the LLM arbitrary SQL or tool escalation.
 
 ## Acceptance criteria
-- Deterministic fixture tests for CRS, distances, invalid geometry and empty results.
-- Query is read-only, schema-scoped, bounded by time/rows/cost and logged.
+- Deterministic fixture tests for CRS, distances, invalid geometry, and empty results.
+- Query is read-only, schema-scoped, bounded by time/rows/cost, and logged.
 - Natural-language narrative can be cross-checked against computed structured output.
 - No invented geospatial features/counts; unknown fields explicitly marked.
 - A runnable public demo with no sensitive imagery or client data.
-
-## Links
-- [R&D Notion hub](https://app.notion.com/p/3fc524057c2f81a081e4f3f2739f32ea)
-- [R&D Linear project](https://linear.app/khamseen/project/khamseen-randd-frontier-tech-lab-2027-b15f6fbc3e25)
-- [Existing Agentic GIS strategy](https://app.notion.com/p/3fa524057c2f816fb8d9e3073883e233)
