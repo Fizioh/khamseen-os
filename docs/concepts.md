@@ -8,6 +8,8 @@ An **Agent** is an organizational identity (chief, reviewer, worker) with roles,
 
 A **Model** is a runtime dependency (LLM, embedding model, etc.). Agents reference runtimes; they do not embed model names as source of truth.
 
+The agent's identity therefore stays stable when the underlying model or harness changes — a new model is not a new agent.
+
 ## Task ≠ Run
 
 A **Task** is requested work (outcome, ticket, intent).
@@ -15,6 +17,8 @@ A **Task** is requested work (outcome, ticket, intent).
 A **Run** is one **attempt** to execute a task. Retries create new runs; failed attempts remain auditable.
 
 Task status and run status are **independent** state machines.
+
+A task can have many runs over time (one per attempt); the task's status tracks the outcome of the work, not which run is currently executing.
 
 ## Capability ≠ Skill ≠ Tool
 
