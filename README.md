@@ -1,6 +1,7 @@
 # Khamseen OS
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](LICENSE)
+[![CI](https://github.com/Fizioh/khamseen-os/actions/workflows/ci.yml/badge.svg)](https://github.com/Fizioh/khamseen-os/actions/workflows/ci.yml)
 [![Status](https://img.shields.io/badge/status-experimental%20alpha-orange.svg)](#project-status)
 
 **An open-source reliability and policy layer for autonomous AI agents.**
@@ -90,8 +91,9 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md), [docs/concepts.md](docs/concepts.md
 | Area | Status in `khamseen-os` | Notes |
 |------|-------------------------|-------|
 | Architecture & ADR contracts | ✅ Published | [ARCHITECTURE.md](ARCHITECTURE.md), [ADR-001](docs/decisions/ADR-001-public-core-private-modules.md), [ADR-002](docs/decisions/ADR-002-runtime-portability.md) |
-| Reliability core (`src/khamseen_os`) | 🚧 Experimental alpha | Typed contracts, bounded autonomy guards, `FakeRuntime` |
-| Runnable engineering loop | 🚧 Experimental alpha | `examples/engineering-loop/` offline deterministic workflow |
+| Reliability core (`src/khamseen_os`) | ✅ Experimental alpha | Typed contracts, bounded autonomy guards, `FakeRuntime` |
+| Runnable engineering loop | ✅ Executable offline | [examples/engineering-loop/](examples/engineering-loop/README.md) |
+| Public CI & quality gates | ✅ Active on GitHub Actions | Pytest, Ruff, Mypy, example execution, link & secret checks |
 | Hermes runtime adapter | 📄 Contract & fixtures | Verified CLI contract + conformance fixtures; live execution optional |
 | Threat model & security tests | 📄 In progress | `docs/security/threat-model.md` |
 
