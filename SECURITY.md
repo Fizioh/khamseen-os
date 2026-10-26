@@ -1,33 +1,33 @@
-# Security policy
+# Security Policy
 
 ## Supported versions
 
 | Version | Supported |
 |---------|-----------|
-| `main` (docs-only alpha) | Documentation fixes only |
-| Future tagged releases | Will be listed here when runtime artifacts exist |
+| `main` (`0.1.0a1` experimental alpha) | Security fixes and threat-model updates |
+| Future tagged releases | Will be listed here as versions are published |
 
-There is **no production runtime release** from this repository yet.
+`khamseen-os` is currently in **experimental alpha**.
+
+## Threat model and security boundaries
+
+See [docs/security/threat-model.md](docs/security/threat-model.md) for the full 12-threat analysis covering prompt injection, untrusted repository instructions, malicious skills, tool privilege escalation, secret exposure, unauthorized process/network operations, forged execution evidence, budget exhaustion, approval bypass, cross-domain data leakage, supply-chain compromise, and unsafe autonomous remediation.
+
+**Important operational boundary:** Python policy objects in `khamseen-os` enforce deterministic workflow contracts, evidence verification, budgets, and human approval gates. **OS-level process, filesystem, network, and credential isolation must be enforced by an external secure container or sandbox runtime.**
 
 ## Reporting a vulnerability
 
-**Do not** open a public GitHub issue for security problems.
+**Do not** open a public GitHub issue for undisclosed security vulnerabilities.
 
-Email the maintainers with:
+Report vulnerabilities privately via GitHub Security Advisories on [Fizioh/khamseen-os](https://github.com/Fizioh/khamseen-os/security) or by contacting the repository maintainers with:
 
-- Description and impact
-- Steps to reproduce (if applicable)
-- Affected commit or document version
-- Your suggested fix (optional)
+- Description and potential impact
+- Steps or minimal script to reproduce
+- Affected commit SHA or module
+- Suggested mitigation (optional)
 
-We will acknowledge within a reasonable timeframe and coordinate disclosure.
+## Safe contribution guidelines
 
-## Scope
-
-- This policy covers the **khamseen-os** public repository.
-- Private deployments, client data, and proprietary modules are out of scope for public reports — contact your operator directly.
-
-## Safe contribution
-
-- Never commit API keys, tokens, customer data, or production URLs.
-- Redact logs and screenshots in PRs and issues.
+- Never commit API keys, tokens, customer data, or private operational URLs.
+- Keep `dependencies = []` in `pyproject.toml` free of unnecessary third-party runtime packages.
+- Add deterministic regression tests in `tests/test_security_regressions.py` when hardening policy or adapter boundaries.
