@@ -414,16 +414,10 @@ class EngineeringWorkflowRunner:
             stage=LifecycleStage.IMPLEMENT,
             correlation_id=task.correlation_id,
         )
-        all_failed_and_impl = tuple(
-            r
-            for r in outcome.runs
-            if r.stage == LifecycleStage.IMPLEMENT
-            or r.status in (RunStatus.FAILED, RunStatus.TIMED_OUT)
-        )
         next_eval = self.policy_engine.evaluate_pre_run(
             task=task,
             candidate_run=probe_run,
-            prior_runs=all_failed_and_impl,
+            prior_runs=tuple(outcome.runs),
             approvals=tuple(outcome.approvals),
         )
         if next_eval.decision != PolicyDecision.ALLOW:
