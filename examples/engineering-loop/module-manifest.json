@@ -1,0 +1,43 @@
+{
+  "id": "engineering",
+  "version": "0.1.0",
+  "chief_role": "engineering_chief",
+  "capabilities": [
+    "code.write",
+    "tests.verify",
+    "review.independent",
+    "release.publish"
+  ],
+  "tools": [
+    "git.diff",
+    "git.commit",
+    "pytest.execute",
+    "ruff.check",
+    "github.pr.create"
+  ],
+  "data_scopes": [
+    "repository:scoped",
+    "issues:public"
+  ],
+  "approval_policy": "policies/engineering-default.json",
+  "skills": [
+    {
+      "id": "bounded_patch_implementer",
+      "capabilities": ["code.write", "tests.verify"],
+      "allowed_tools": ["git.diff", "git.commit", "pytest.execute", "ruff.check"],
+      "requires_human_approval": false
+    },
+    {
+      "id": "independent_pr_reviewer",
+      "capabilities": ["review.independent"],
+      "allowed_tools": ["git.diff", "pytest.execute", "ruff.check"],
+      "requires_human_approval": false
+    },
+    {
+      "id": "release_publisher",
+      "capabilities": ["release.publish"],
+      "allowed_tools": ["git.diff", "github.pr.create"],
+      "requires_human_approval": true
+    }
+  ]
+}

@@ -1,5 +1,10 @@
 from __future__ import annotations
 
+from khamseen_os.adapters import (
+    HermesAdapterConfig,
+    HermesCliRuntimeAdapter,
+    SubprocessResult,
+)
 from khamseen_os.conformance import (
     ConformanceCaseResult,
     ConformanceReport,
@@ -27,6 +32,13 @@ from khamseen_os.contracts import (
     redact_secrets,
 )
 from khamseen_os.loop import EngineeringWorkflowRunner, WorkflowOutcome
+from khamseen_os.manifest import (
+    ManifestValidationError,
+    ModuleManifest,
+    SkillSpec,
+    load_and_validate_manifest,
+    validate_module_manifest,
+)
 from khamseen_os.policy import (
     ALLOWED_RUN_STATUS_TRANSITIONS,
     ALLOWED_STAGE_TRANSITIONS,
@@ -58,7 +70,11 @@ __all__ = [
     "ExecutionResult",
     "FakeRuntime",
     "FakeStepSpec",
+    "HermesAdapterConfig",
+    "HermesCliRuntimeAdapter",
     "LifecycleStage",
+    "ManifestValidationError",
+    "ModuleManifest",
     "PolicyDecision",
     "PolicyEngine",
     "PolicyEvaluation",
@@ -66,15 +82,19 @@ __all__ = [
     "Run",
     "RunStatus",
     "RuntimeProvider",
+    "SkillSpec",
+    "SubprocessResult",
     "Task",
     "TaskStatus",
     "UnsafeStateTransitionError",
     "UsageMetrics",
     "WorkflowOutcome",
     "__version__",
+    "load_and_validate_manifest",
     "redact_mapping",
     "redact_secrets",
     "transition_run_status",
     "transition_task_stage",
     "transition_task_status",
+    "validate_module_manifest",
 ]
