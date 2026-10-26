@@ -1,6 +1,6 @@
 # Module contract
 
-A **module** is a domain package that plugs into the Khamseen OS control plane without forking core primitives.
+A **module** is a domain package that plugs into the Khamseen OS reliability and policy layer without forking core primitives.
 
 Examples: engineering, research, operations, commerce, career, SaaS, R&D — same lifecycle, different chiefs and scopes.
 
@@ -8,20 +8,20 @@ Examples: engineering, research, operations, commerce, career, SaaS, R&D — sam
 
 | Artifact | Description |
 |----------|-------------|
-| **Domain chief** | Top delegate for the module (`agent_type`, escalation to human authority). |
+| **Domain chief** | Top delegate for the module (`chief_role`, escalation to human authority). |
 | **Role catalog** | Managers, specialists, workers (organizational, not necessarily 1:1 with graph nodes). |
 | **Capability map** | Which capabilities each role may accept. |
-| **Skill set** | Versioned skills (tool allowlists, procedures, constraints). |
-| **Tool catalog** | Registered tools with schemas and permission scopes. |
-| **Data scopes** | What data classes the module may read/write (repo, tickets, catalog, etc.). |
+| **Skill set** | Versioned skills (`SkillSpec`: capabilities, tool allowlists, approval requirements). |
+| **Tool catalog** | Registered tools with `<namespace>.<action>` identifiers and permission scopes. |
+| **Data scopes** | What data classes the module may read/write (`<resource>:<scope>`, no wildcards). |
 | **Workflow templates** | Default graphs/loops for common outcomes (not mandatory for all tasks). |
-| **Policy hooks** | When human approval is required for this domain. |
+| **Policy hooks** | When human approval is required for this domain (`approval_policy`). |
 
 ## Module must not
 
 - Store secrets in the open core repository
 - Embed client-specific production configuration
-- Replace control-plane primitives (Task, Run, Event, Approval)
+- Replace control-plane primitives (`Task`, `Run`, `Evidence`, `AuditEvent`, `ApprovalRecord`)
 - Bypass independent review for implementer-owned work
 - Invent business measurements inside LLM outputs
 
@@ -30,52 +30,33 @@ Examples: engineering, research, operations, commerce, career, SaaS, R&D — sam
 ```mermaid
 sequenceDiagram
   participant H as Human authority
-  participant CP as Control plane
+  participant CP as Khamseen OS (policy & evidence)
   participant M as Domain module
-  participant P as Providers
+  participant P as RuntimeProvider (FakeRuntime / Hermes)
 
-  H->>CP: Create task / policy
-  CP->>M: Route by module id + capability
-  M->>CP: Plan graph / delegate runs
-  CP->>P: Execute via runtime
-  P-->>CP: Tool results / events
-  CP->>M: Review findings
-  M->>CP: Gate recommendation
-  CP->>H: Human approval (if required)
+  H->>CP: Create Task / policy
+  CP->>M: Validate manifest + route by capability
+  M->>CP: Scoped skill + tool allowlist
+  CP->>P: Execute Run via RuntimeProvider
+  P-->>CP: ExecutionResult + UsageMetrics
+  CP->>CP: Verify Evidence (CHECK / REVIEW / QA)
+  CP->>H: Human approval gate (if HUMAN_REQUIRED)
 ```
 
-## Module manifest (target)
+## Module manifest schema and validation
 
-Future modules will declare a manifest (format TBD during extraction), minimally:
+Module manifests are validated against [schemas/module-manifest.schema.json](../schemas/module-manifest.schema.json) using `validate_module_manifest` / `load_and_validate_manifest` in `src/khamseen_os/manifest.py`.
 
-```yaml
-id: engineering
-version: 0.1.0
-chief_role: engineering_chief
-capabilities:
-  - code.write
-  - github.pr
-data_scopes:
-  - repository:scoped
-tools:
-  - git.commit
-  - tests.execute
-approval_policy: workflows/engineering.yaml
-```
+Reference engineering manifest: [examples/engineering-loop/module-manifest.json](../examples/engineering-loop/module-manifest.json).
 
-This YAML is **illustrative** — not validated by tooling in this repository yet.
+### Validation rules enforced in CI
 
-## Validation (planned)
-
-- Schema validation for manifest
-- Tool references must exist in registry
-- Capabilities must map to known routing table
-- No overlapping chief for same module id
-
-Track: GitHub issues labeled `module-contract`.
+- All required fields (`id`, `version`, `chief_role`, `capabilities`, `tools`, `data_scopes`, `approval_policy`) must be present and well-formed.
+- Every skill in `skills` must reference only `capabilities` and `allowed_tools` declared in the module manifest.
+- Wildcard data scopes (`*`) and overlapping `chief_role` definitions for the same module ID are rejected with `ManifestValidationError`.
 
 ## Private modules
 
-Proprietary or client-specific modules may remain in private repositories while implementing this contract. The open core publishes **interfaces and reference examples only**.
+Proprietary or client-specific modules may remain in private repositories while implementing this contract. The open core publishes **interfaces, validation tooling, and reference examples only**.
 
-See [ADR-001](decisions/ADR-001-public-core-private-modules.md).
+See [ADR-001](decisions/ADR-001-public-core-private-modules.md) and [docs/contracts/skills-and-capabilities.md](contracts/skills-and-capabilities.md).

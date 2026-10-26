@@ -23,6 +23,16 @@ Khamseen OS is designed as a focused verification and policy layer rather than a
 
 Khamseen OS **does not** rebuild Paperclip dashboards, org charts, Hermes agent runners, memory stores, or Kanban boards. It enforces deterministic rules and evidence checks around runtime execution without requiring vendor-specific IDE or subscription dependencies.
 
+## Quickstart (3 commands)
+
+```bash
+python -m pip install -e ".[dev]"
+python examples/engineering-loop/run_example.py
+pytest -v
+```
+
+See [docs/getting-started.md](docs/getting-started.md) for virtual environment setup, CLI options, and troubleshooting.
+
 ## Value proposition
 
 - **Bounded autonomy**: enforce maximum attempts, timeouts, verified token/cost budgets, and identical-failure circuit breakers.
@@ -86,16 +96,21 @@ flowchart TB
 
 Details: [ARCHITECTURE.md](ARCHITECTURE.md), [docs/concepts.md](docs/concepts.md), [ADR-002](docs/decisions/ADR-002-runtime-portability.md).
 
+## Open experiments and R&D
+
+Alongside the reliability core in `src/khamseen_os/`, [docs/rnd/](docs/rnd/README.md) tracks open research protocols (such as the Agent Runtime Benchmark, Open Geospatial Agent, and Open AlphaEvolve Mini). Research protocols are explicitly labeled and kept separate from shipped package features.
+
 ## Project status
 
 | Area | Status in `khamseen-os` | Notes |
 |------|-------------------------|-------|
 | Architecture & ADR contracts | ✅ Published | [ARCHITECTURE.md](ARCHITECTURE.md), [ADR-001](docs/decisions/ADR-001-public-core-private-modules.md), [ADR-002](docs/decisions/ADR-002-runtime-portability.md) |
-| Reliability core (`src/khamseen_os`) | ✅ Experimental alpha | Typed contracts, bounded autonomy guards, `FakeRuntime` |
+| Reliability core (`src/khamseen_os`) | ✅ Experimental alpha | Typed contracts, bounded autonomy guards, `FakeRuntime`, manifest validator |
 | Runnable engineering loop | ✅ Executable offline | [examples/engineering-loop/](examples/engineering-loop/README.md) |
+| Provider conformance suite | ✅ Executable offline | 9-point `ProviderConformanceHarness` in `src/khamseen_os/conformance.py` |
+| Hermes runtime adapter | ✅ Contract & fixtures | Verified `--oneshot` / `--usage-file` adapter + conformance fixtures; live CLI opt-in |
+| Threat model & security tests | ✅ Published & tested | [docs/security/threat-model.md](docs/security/threat-model.md) + 12 regression tests |
 | Public CI & quality gates | ✅ Active on GitHub Actions | Pytest, Ruff, Mypy, example execution, link & secret checks |
-| Hermes runtime adapter | 📄 Contract & fixtures | Verified CLI contract + conformance fixtures; live execution optional |
-| Threat model & security tests | 📄 In progress | `docs/security/threat-model.md` |
 
 ## Documentation
 
@@ -108,12 +123,24 @@ Details: [ARCHITECTURE.md](ARCHITECTURE.md), [docs/concepts.md](docs/concepts.md
 | [docs/getting-started.md](docs/getting-started.md) | Quickstart and local verification commands |
 | [docs/concepts.md](docs/concepts.md) | Canonical vocabulary and invariants |
 | [docs/module-contract.md](docs/module-contract.md) | Domain module boundary |
+| [docs/contracts/task-run-states.md](docs/contracts/task-run-states.md) | Task, Run, Event, and Approval state machines |
+| [docs/contracts/graphs-and-loops.md](docs/contracts/graphs-and-loops.md) | Bounded execution graphs and correction loops |
+| [docs/contracts/runtime-provider.md](docs/contracts/runtime-provider.md) | `RuntimeProvider` interface and conformance specification |
+| [docs/contracts/hermes-adapter.md](docs/contracts/hermes-adapter.md) | Hermes Agent reference adapter contract |
+| [docs/contracts/skills-and-capabilities.md](docs/contracts/skills-and-capabilities.md) | Skills registry and capability routing contract |
+| [docs/security/threat-model.md](docs/security/threat-model.md) | 12-threat autonomous agent security threat model |
 | [docs/decisions/ADR-001-public-core-private-modules.md](docs/decisions/ADR-001-public-core-private-modules.md) | Public core vs private modules split |
 | [docs/decisions/ADR-002-runtime-portability.md](docs/decisions/ADR-002-runtime-portability.md) | Runtime portability and Hermes reference execution boundary |
 
 ## Contributing
 
-We welcome contract reviews, conformance test cases, security hardening, and bounded examples. See [CONTRIBUTING.md](CONTRIBUTING.md) and [open issues](https://github.com/Fizioh/khamseen-os/issues).
+We welcome conformance fixtures, policy guard improvements, security regression tests, and documentation refinements. See [CONTRIBUTING.md](CONTRIBUTING.md) and [open issues](https://github.com/Fizioh/khamseen-os/issues) labeled `good first issue` or `help wanted`.
+
+## Community acknowledgements
+
+Thank you to our external open-source contributors:
+
+- [@wufangyong973](https://github.com/wufangyong973) — clarified the `Agent ≠ Model` and `Task ≠ Run` vocabulary invariants in [docs/concepts.md](docs/concepts.md) ([PR #12](https://github.com/Fizioh/khamseen-os/pull/12), closing [#10](https://github.com/Fizioh/khamseen-os/issues/10)).
 
 ## License
 

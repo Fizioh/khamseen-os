@@ -1,53 +1,40 @@
 # Roadmap
 
-**Experimental alpha.** Dates are indicative; scope may change as the open core is extracted.
+**Experimental alpha.** This roadmap tracks the public open-source reliability and policy layer in `Fizioh/khamseen-os`.
 
-This roadmap tracks the **open repository** (`khamseen-os`). It does not mirror a private issue tracker.
+## Milestone 0 — Open documentation & boundary definition (Completed)
 
-## Phase 0 — Open documentation (current)
+- [x] Public repository under Apache-2.0 license
+- [x] Core vocabulary (`docs/concepts.md`) and module boundary (`docs/module-contract.md`)
+- [x] [ADR-001: Public core and private modules](docs/decisions/ADR-001-public-core-private-modules.md)
+- [x] [ADR-002: Runtime portability and Hermes reference execution boundary](docs/decisions/ADR-002-runtime-portability.md)
 
-- [x] Public repository with Apache 2.0 license
-- [x] README, architecture, concepts, module contract
-- [x] Contributing, security, GitHub templates
-- [x] Starter issues for contributors
-- [ ] Community review of contracts (ongoing)
+## Milestone 1 — Executable reliability core & CI (Completed)
 
-**Deliverable:** a credible entry point for contributors without claiming a shipped runtime.
+- [x] Zero-dependency Python package (`src/khamseen_os/`) with typed `Task`, `Run`, `Evidence`, `PolicyDecision`, `RuntimeProvider`, and `ExecutionResult` contracts
+- [x] Deterministic state machines and bounded autonomy guards (`PolicyEngine`)
+- [x] Runnable synthetic engineering workflow example (`examples/engineering-loop/`) using `FakeRuntime`
+- [x] Public GitHub Actions CI (Pytest, Ruff, Mypy, example execution, Markdown link & secret validation)
 
-## Phase 1 — Extract generic core
+## Milestone 2 — Provider conformance & Hermes reference adapter (Completed)
 
-- [ ] Isolate control-plane models and services (Agent, Task, Run, Event, Approval)
-- [ ] Remove domain-specific coupling from the extracted core
-- [ ] Reproducible dev bootstrap + minimal synthetic scenario
-- [ ] CI for the extracted core (lint, typecheck, tests)
+- [x] Reusable 9-point `ProviderConformanceHarness` (`src/khamseen_os/conformance.py`)
+- [x] Experimental `HermesCliRuntimeAdapter` targeting verified `hermes --oneshot ... --usage-file ...` flags
+- [x] JSON schema and validator for domain module manifests (`schemas/module-manifest.schema.json`, `src/khamseen_os/manifest.py`)
+- [x] 12-vector autonomous agent threat model (`docs/security/threat-model.md`) with deterministic regression tests
 
-**Exit criteria:** a contributor can clone, run tests, and execute a **synthetic** task/run/event flow without private modules.
+## Milestone 3 — Next high-value open-source improvements (Up next)
 
-## Phase 2 — Contracts & transitions
+- [ ] **Hermes ACP / Gateway streaming adapter**: Extend Hermes integration beyond `--oneshot` CLI to support streaming events and cancellation over `acp_adapter` / gateway sessions.
+- [ ] **Cryptographic evidence signing & JSONL audit sink**: Add optional Ed25519/HMAC evidence signatures and append-only JSONL audit export for tamper-evident cross-process verification.
+- [ ] **Container sandbox runner profile**: Provide a reference rootless Docker/Podman execution wrapper around `HermesCliRuntimeAdapter` enforcing network, filesystem, and PID isolation.
 
-- [ ] Codify Task/Run/Event state machines and allowed transitions
-- [ ] Document gate types and mapping to human approval
-- [ ] Skills registry and capability routing contract
-- [ ] Bounded graph + correction loop enforcement
+## Non-goals
 
-## Phase 3 — Provider conformance
+- Rebuilding Paperclip org charts/budgets or Hermes Agent native memory, toolsets, or Kanban boards.
+- Bundling IDE-specific harnesses (Cursor, Grok, OpenCode) as runtime dependencies.
+- Copying proprietary domain modules into the open-source repository.
 
-- [ ] First provider interface (runtime/harness) frozen enough for adapters
-- [ ] Conformance test suite (fake provider + one reference adapter behind feature flag)
-- [ ] Context / review provider stubs
+## How to contribute
 
-## Phase 4 — Modules (examples)
-
-- [ ] Reference **engineering** module (skills + tools, no proprietary data)
-- [ ] Module loader validation against [docs/module-contract.md](docs/module-contract.md)
-- [ ] Additional domain examples as documentation + optional sample modules
-
-## Explicitly later
-
-- Multi-tenancy, billing, hosted SaaS control plane
-- Guaranteed compatibility with any specific IDE or vendor agent
-- Copying proprietary business modules into the open repo
-
-## How to help
-
-Pick an [open issue](https://github.com/Fizioh/khamseen-os/issues) labeled `good first issue` or `help wanted`, or propose a contract clarification PR.
+Browse [open issues](https://github.com/Fizioh/khamseen-os/issues) labeled `good first issue` or `help wanted` and see [CONTRIBUTING.md](CONTRIBUTING.md).
