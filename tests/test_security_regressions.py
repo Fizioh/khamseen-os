@@ -1,9 +1,14 @@
 from __future__ import annotations
 
+import sys
 import tomllib
 from pathlib import Path
 
 import pytest
+
+_REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(_REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from khamseen_os import (
     ApprovalRecord,
@@ -29,8 +34,7 @@ from khamseen_os import (
     UsageMetrics,
     validate_module_manifest,
 )
-
-_REPO_ROOT = Path(__file__).resolve().parents[1]
+from scripts.validate_repo import check_workflow_security
 
 
 def test_t1_prompt_injection_claim_rejected() -> None:
@@ -470,6 +474,18 @@ def test_pre_dispatch_sensitive_action_zero_execute_calls_without_valid_approval
     )
     assert len(wrong_action_runtime.executed_requests) == 0
     assert out_wrong_action.task.status == TaskStatus.WAITING_APPROVAL
+
+
+def test_ci_workflow_supply_chain_hardening_and_hostile_fixtures(tmp_path: Path) -> None:
+    assert check_workflow_security() == []
+
+    ci_text = (_REPO_ROOT / ".github" / "workflows" / "ci.yml").read_text(encoding="utf-8")
+    assert "pull_request_target" not in ci_text
+    assert "workflow_run" not in ci_text
+    assert "issue_comment" not in ci_text
+    assert "persist-credentials: false" in ci_text
+    assert "contents: read" in ci_text
+    assert "self-hosted" not in ci_text
 
 
 def test_no_auto_fabricated_evidence_and_role_spoofing_rejected() -> None:
