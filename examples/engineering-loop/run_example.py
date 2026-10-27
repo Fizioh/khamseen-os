@@ -103,6 +103,7 @@ def run_sensitive_approval_scenario(approved: bool) -> WorkflowOutcome:
                 approver_id="human_security_lead",
                 status=ApprovalStatus.APPROVED,
                 reason="Verified deployment policy diff and rollback plan",
+                approved_actions=("policy.deployment.modify",),
             ),
         )
     runner = EngineeringWorkflowRunner(runtime=runtime)

@@ -257,6 +257,7 @@ def test_human_approval_gate_pauses_and_completes_when_approved() -> None:
         approver_id="human_release_manager",
         status=ApprovalStatus.APPROVED,
         reason="Reviewed migration plan and rollback script",
+        approved_actions=("db.schema.migrate",),
     )
     outcome_approved = runner.run_workflow(task_approved, approvals=(approval,))
     assert outcome_approved.task.stage == LifecycleStage.DONE
