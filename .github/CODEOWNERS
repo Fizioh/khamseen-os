@@ -1,0 +1,9 @@
+# Security, CI/CD, and packaging boundaries require owner review
+* @Fizioh
+/.github/ @Fizioh
+/pyproject.toml @Fizioh
+/scripts/ @Fizioh
+/schemas/ @Fizioh
+/src/khamseen_os/ @Fizioh
+/docs/security/ @Fizioh
+/SECURITY.md @Fizioh
