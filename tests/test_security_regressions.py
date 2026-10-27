@@ -371,3 +371,157 @@ def test_t12_unsafe_remediation_preserves_audit_and_requires_review() -> None:
     assert impl_runs[0].run_id != impl_runs[1].run_id
     assert impl_runs[0].attempt == 1
     assert impl_runs[1].attempt == 2
+
+
+def test_pre_dispatch_sensitive_action_zero_execute_calls_without_valid_approval() -> None:
+    missing_runtime = FakeRuntime()
+    task_missing = Task(
+        title="Sensitive migration without approval",
+        description="Must block before any runtime execute() call",
+        sensitive_actions=("db.schema.migrate",),
+        requires_human_approval=True,
+    )
+    out_missing = EngineeringWorkflowRunner(runtime=missing_runtime).run_workflow(task_missing)
+    assert len(missing_runtime.executed_requests) == 0
+    assert out_missing.task.stage == LifecycleStage.HUMAN_APPROVAL
+    assert out_missing.task.status == TaskStatus.WAITING_APPROVAL
+    assert out_missing.runs[0].status == RunStatus.REJECTED
+
+    rejected_runtime = FakeRuntime()
+    task_rejected = Task(
+        title="Sensitive migration rejected",
+        description="Must block before any runtime execute() call",
+        sensitive_actions=("db.schema.migrate",),
+        requires_human_approval=True,
+    )
+    rejection = ApprovalRecord(
+        task_id=task_rejected.task_id,
+        approver_id="human_secops",
+        status=ApprovalStatus.REJECTED,
+        reason="Denied",
+        approved_actions=("db.schema.migrate",),
+    )
+    out_rejected = EngineeringWorkflowRunner(runtime=rejected_runtime).run_workflow(
+        task_rejected, approvals=(rejection,)
+    )
+    assert len(rejected_runtime.executed_requests) == 0
+    assert out_rejected.task.stage == LifecycleStage.FAILED
+    assert out_rejected.task.status == TaskStatus.FAILED
+
+    forged_runtime = FakeRuntime()
+    task_forged = Task(
+        title="Sensitive migration with forged approval",
+        description="Tampered content_hash must block before execute()",
+        sensitive_actions=("db.schema.migrate",),
+        requires_human_approval=True,
+    )
+    forged_approval = ApprovalRecord(
+        task_id=task_forged.task_id,
+        approver_id="human_secops",
+        status=ApprovalStatus.APPROVED,
+        reason="Forged approval",
+        approved_actions=("db.schema.migrate",),
+        content_hash="0" * 64,
+    )
+    out_forged = EngineeringWorkflowRunner(runtime=forged_runtime).run_workflow(
+        task_forged, approvals=(forged_approval,)
+    )
+    assert len(forged_runtime.executed_requests) == 0
+    assert out_forged.task.stage == LifecycleStage.FAILED
+    assert out_forged.final_decision is not None
+    assert "forged_or_unverified_approval" in out_forged.final_decision.violated_rules
+
+    self_runtime = FakeRuntime()
+    task_self = Task(
+        title="Sensitive migration self-approved by implementer or agent prefix",
+        description="Agent/implementer approval must result in zero execute() calls",
+        sensitive_actions=("db.schema.migrate",),
+        requires_human_approval=True,
+    )
+    self_approval = ApprovalRecord(
+        task_id=task_self.task_id,
+        approver_id="agent_implementer",
+        status=ApprovalStatus.APPROVED,
+        reason="Self-approved",
+        approved_actions=("db.schema.migrate",),
+    )
+    out_self = EngineeringWorkflowRunner(runtime=self_runtime).run_workflow(
+        task_self, approvals=(self_approval,)
+    )
+    assert len(self_runtime.executed_requests) == 0
+    assert out_self.task.status == TaskStatus.WAITING_APPROVAL
+
+    wrong_action_runtime = FakeRuntime()
+    task_wrong_action = Task(
+        title="Sensitive migration with mismatched action approval",
+        description="Approval for another action must not authorize db.schema.migrate",
+        sensitive_actions=("db.schema.migrate",),
+        requires_human_approval=True,
+    )
+    wrong_action_approval = ApprovalRecord(
+        task_id=task_wrong_action.task_id,
+        approver_id="human_secops",
+        status=ApprovalStatus.APPROVED,
+        reason="Approved read-only export only",
+        approved_actions=("logs.export",),
+    )
+    out_wrong_action = EngineeringWorkflowRunner(runtime=wrong_action_runtime).run_workflow(
+        task_wrong_action, approvals=(wrong_action_approval,)
+    )
+    assert len(wrong_action_runtime.executed_requests) == 0
+    assert out_wrong_action.task.status == TaskStatus.WAITING_APPROVAL
+
+
+def test_no_auto_fabricated_evidence_and_role_spoofing_rejected() -> None:
+    bare_runtime = FakeRuntime(emit_stage_evidence=False)
+    task = Task(
+        title="Bare runtime success without evidence",
+        description="Runner must not auto-fabricate verified evidence when runtime returns none",
+    )
+    outcome_bare = EngineeringWorkflowRunner(runtime=bare_runtime).run_workflow(task)
+    assert outcome_bare.task.stage == LifecycleStage.FAILED
+    assert outcome_bare.task.status == TaskStatus.FAILED
+    assert outcome_bare.final_decision is not None
+    assert outcome_bare.final_decision.decision == PolicyDecision.DENY
+    assert "missing_mandatory_evidence:DETERMINISTIC_CHECK" in outcome_bare.final_decision.violated_rules
+
+    illustrative_runtime = FakeRuntime(emit_stage_evidence=False)
+    task_illustrative = Task(
+        title="Illustrative unverified evidence mode",
+        description="emit_default_stage_evidence=True emits verified=False and still fails closed",
+    )
+    outcome_illustrative = EngineeringWorkflowRunner(runtime=illustrative_runtime).run_workflow(
+        task_illustrative, emit_default_stage_evidence=True
+    )
+    assert outcome_illustrative.task.stage == LifecycleStage.FAILED
+    assert outcome_illustrative.final_decision is not None
+    assert "forged_or_unverified_evidence:DETERMINISTIC_CHECK" in outcome_illustrative.final_decision.violated_rules
+
+    spoofed_check_ev = Evidence(
+        task_id=task.task_id,
+        run_id="run_spoof_1",
+        kind=EvidenceKind.DETERMINISTIC_CHECK,
+        producer_id="agent_implementer",
+        producer_role="implementer",
+        passed=True,
+        verified=True,
+        summary="Implementer spoofed deterministic check",
+    )
+    impl_run = Run(
+        task_id=task.task_id,
+        attempt=1,
+        agent_id="agent_implementer",
+        agent_role="implementer",
+        stage=LifecycleStage.IMPLEMENT,
+    )
+    spoof_eval = PolicyEngine().evaluate_completion_gate(
+        task= Task(
+            title="Check role spoofing",
+            description="Only checker role may produce DETERMINISTIC_CHECK",
+            required_evidence=(EvidenceKind.DETERMINISTIC_CHECK,),
+        ),
+        implementer_run=impl_run,
+        evidence_records=(spoofed_check_ev,),
+    )
+    assert spoof_eval.decision == PolicyDecision.DENY
+    assert "invalid_checker_evidence_producer" in spoof_eval.violated_rules

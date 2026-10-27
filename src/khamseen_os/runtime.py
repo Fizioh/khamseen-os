@@ -38,6 +38,14 @@ class FakeStepSpec:
     external_session_id: str | None = None
 
 
+_STAGE_DEFAULT_EVIDENCE_KIND: dict[LifecycleStage, EvidenceKind] = {
+    LifecycleStage.IMPLEMENT: EvidenceKind.IMPLEMENTATION_ARTIFACT,
+    LifecycleStage.CHECK: EvidenceKind.DETERMINISTIC_CHECK,
+    LifecycleStage.REVIEW: EvidenceKind.INDEPENDENT_REVIEW,
+    LifecycleStage.QA: EvidenceKind.QA_VERIFICATION,
+}
+
+
 class FakeRuntime:
     """Deterministic in-memory RuntimeProvider for offline tests and examples."""
 
@@ -47,6 +55,7 @@ class FakeRuntime:
         stage_handlers: dict[tuple[LifecycleStage, int], FakeStepSpec] | None = None,
         custom_handler: Callable[[ExecutionRequest], ExecutionResult] | None = None,
         healthy: bool = True,
+        emit_stage_evidence: bool = True,
     ) -> None:
         self._steps: list[FakeStepSpec] = list(steps or [])
         self._stage_handlers: dict[tuple[LifecycleStage, int], FakeStepSpec] = dict(
@@ -54,6 +63,7 @@ class FakeRuntime:
         )
         self._custom_handler = custom_handler
         self._healthy = healthy
+        self._emit_stage_evidence = emit_stage_evidence
         self.executed_requests: list[ExecutionRequest] = []
         self.cancelled_run_ids: set[str] = set()
 
@@ -118,6 +128,25 @@ class FakeRuntime:
                 external_session_id=spec.external_session_id or f"fake_sess_{request.run_id}",
             )
 
+        evidence_specs = spec.evidence_specs
+        if (
+            not evidence_specs
+            and self._emit_stage_evidence
+            and spec.status == RunStatus.SUCCEEDED
+            and request.stage in _STAGE_DEFAULT_EVIDENCE_KIND
+        ):
+            evidence_specs = (
+                {
+                    "kind": _STAGE_DEFAULT_EVIDENCE_KIND[request.stage],
+                    "producer_id": request.agent_id,
+                    "producer_role": request.agent_role,
+                    "passed": True,
+                    "verified": True,
+                    "summary": spec.output_text or f"FakeRuntime {request.stage.value} fixture passed",
+                    "details": {"attempt": request.attempt, "stage": request.stage.value, "fixture": "fake"},
+                },
+            )
+
         built_evidence = tuple(
             Evidence(
                 task_id=request.task_id,
@@ -132,7 +161,7 @@ class FakeRuntime:
                 summary=str(ev_spec.get("summary", "Evidence artifact recorded")),
                 details=dict(ev_spec.get("details", {})),
             )
-            for ev_spec in spec.evidence_specs
+            for ev_spec in evidence_specs
         )
 
         return ExecutionResult(
