@@ -497,8 +497,13 @@ def test_no_auto_fabricated_evidence_and_role_spoofing_rejected() -> None:
     assert outcome_illustrative.final_decision is not None
     assert "forged_or_unverified_evidence:DETERMINISTIC_CHECK" in outcome_illustrative.final_decision.violated_rules
 
+    spoof_task = Task(
+        title="Check role spoofing",
+        description="Only checker role may produce DETERMINISTIC_CHECK",
+        required_evidence=(EvidenceKind.DETERMINISTIC_CHECK,),
+    )
     spoofed_check_ev = Evidence(
-        task_id=task.task_id,
+        task_id=spoof_task.task_id,
         run_id="run_spoof_1",
         kind=EvidenceKind.DETERMINISTIC_CHECK,
         producer_id="agent_implementer",
@@ -508,18 +513,14 @@ def test_no_auto_fabricated_evidence_and_role_spoofing_rejected() -> None:
         summary="Implementer spoofed deterministic check",
     )
     impl_run = Run(
-        task_id=task.task_id,
+        task_id=spoof_task.task_id,
         attempt=1,
         agent_id="agent_implementer",
         agent_role="implementer",
         stage=LifecycleStage.IMPLEMENT,
     )
     spoof_eval = PolicyEngine().evaluate_completion_gate(
-        task= Task(
-            title="Check role spoofing",
-            description="Only checker role may produce DETERMINISTIC_CHECK",
-            required_evidence=(EvidenceKind.DETERMINISTIC_CHECK,),
-        ),
+        task=spoof_task,
         implementer_run=impl_run,
         evidence_records=(spoofed_check_ev,),
     )
