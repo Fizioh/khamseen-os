@@ -294,6 +294,112 @@ def test_reference_engineering_manifest_and_invalid_manifests() -> None:
         )
 
 
+def test_hermes_least_privilege_toolsets_and_workdir_sandbox_defaults(tmp_path: Path) -> None:
+    empty_adapter = HermesCliRuntimeAdapter(
+        config=HermesAdapterConfig(
+            default_toolsets=(),
+            role_toolsets={},
+            require_explicit_toolsets=True,
+        ),
+        runner_fn=_success_runner,
+    )
+    req_empty = ExecutionRequest(
+        task_id="task_lp",
+        run_id="run_lp_1",
+        attempt=1,
+        agent_id="agent_impl",
+        agent_role="implementer",
+        stage=LifecycleStage.IMPLEMENT,
+        prompt="Run without toolsets",
+        correlation_id="corr_lp",
+        allowed_tools=(),
+    )
+    res_empty = empty_adapter.execute(req_empty)
+    assert res_empty.status == RunStatus.FAILED
+    assert res_empty.error_code == "INVALID_HERMES_REQUEST"
+    assert "Empty Hermes toolset allowlist" in (res_empty.error_message or "")
+
+    role_adapter = HermesCliRuntimeAdapter(
+        config=HermesAdapterConfig(
+            allowed_workdir_roots=(str(tmp_path),),
+            allowed_skills=("safe-skill",),
+        ),
+        runner_fn=_success_runner,
+    )
+    req_reviewer_escalation = ExecutionRequest(
+        task_id="task_rev_esc",
+        run_id="run_rev_esc_1",
+        attempt=1,
+        agent_id="agent_rev",
+        agent_role="reviewer",
+        stage=LifecycleStage.REVIEW,
+        prompt="Reviewer attempting write tool",
+        correlation_id="corr_rev_esc",
+        allowed_tools=("read_file", "git_commit"),
+    )
+    res_rev = role_adapter.execute(req_reviewer_escalation)
+    assert res_rev.status == RunStatus.FAILED
+    assert res_rev.error_code == "INVALID_HERMES_REQUEST"
+    assert "not permitted to use tools: git_commit" in (res_rev.error_message or "")
+
+    req_traversal = ExecutionRequest(
+        task_id="task_path",
+        run_id="run_path_1",
+        attempt=1,
+        agent_id="agent_impl",
+        agent_role="implementer",
+        stage=LifecycleStage.IMPLEMENT,
+        prompt="Attempt path traversal",
+        correlation_id="corr_path",
+        workdir="../outside_workspace",
+    )
+    res_trav = role_adapter.execute(req_traversal)
+    assert res_trav.status == RunStatus.FAILED
+    assert res_trav.error_code == "INVALID_HERMES_REQUEST"
+
+    outside_dir = tmp_path.parent
+    req_outside_root = ExecutionRequest(
+        task_id="task_outside",
+        run_id="run_outside_1",
+        attempt=1,
+        agent_id="agent_impl",
+        agent_role="implementer",
+        stage=LifecycleStage.IMPLEMENT,
+        prompt="Attempt workdir outside allowed root",
+        correlation_id="corr_outside",
+        workdir=str(outside_dir),
+    )
+    res_outside = role_adapter.execute(req_outside_root)
+    assert res_outside.status == RunStatus.FAILED
+    assert res_outside.error_code == "INVALID_HERMES_REQUEST"
+
+    req_bad_skill = ExecutionRequest(
+        task_id="task_skill",
+        run_id="run_skill_1",
+        attempt=1,
+        agent_id="agent_impl",
+        agent_role="implementer",
+        stage=LifecycleStage.IMPLEMENT,
+        prompt="Attempt unapproved skill",
+        correlation_id="corr_skill",
+        allowed_skills=("unapproved-skill",),
+    )
+    res_skill = role_adapter.execute(req_bad_skill)
+    assert res_skill.status == RunStatus.FAILED
+    assert res_skill.error_code == "INVALID_HERMES_REQUEST"
+
+    host_env_with_api_keys = {
+        "PATH": "/usr/bin",
+        "OPENROUTER_API_KEY": "sk-or-secret",
+        "OPENAI_API_KEY": "sk-openai-secret",
+        "ANTHROPIC_API_KEY": "sk-ant-secret",
+    }
+    sanitized_default = role_adapter.build_sanitized_env(req_empty, base_env=host_env_with_api_keys)
+    assert "OPENROUTER_API_KEY" not in sanitized_default
+    assert "OPENAI_API_KEY" not in sanitized_default
+    assert "ANTHROPIC_API_KEY" not in sanitized_default
+
+
 @pytest.mark.live_hermes
 @pytest.mark.skipif(
     os.environ.get("KHAMSEEN_HERMES_LIVE_TEST") != "1" or shutil.which("hermes") is None,
