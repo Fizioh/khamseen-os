@@ -10,6 +10,8 @@ _REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(_REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(_REPO_ROOT))
 
+from scripts.validate_repo import check_workflow_security
+
 from khamseen_os import (
     ApprovalRecord,
     ApprovalStatus,
@@ -34,7 +36,6 @@ from khamseen_os import (
     UsageMetrics,
     validate_module_manifest,
 )
-from scripts.validate_repo import check_workflow_security
 
 
 def test_t1_prompt_injection_claim_rejected() -> None:
