@@ -51,10 +51,13 @@ Hermes writes a structured JSON usage report even when a turn fails (`hermes_cli
 
 1. **One-shot approval bypass mitigation**:
    In `hermes --oneshot`, Hermes sets `HERMES_YOLO_MODE=1` and auto-bypasses interactive terminal prompts for scriptability. Consequently, Khamseen OS **must** evaluate `PolicyDecision.HUMAN_REQUIRED` in `PolicyEngine` before dispatching sensitive actions or privileged skills.
-2. **Wildcard toolset prohibition**:
-   `HermesCliRuntimeAdapter` rejects wildcard toolsets (`--toolsets all` or `--toolsets *`) unless `allow_wildcard_toolsets=True` is explicitly configured.
-3. **Environment scrubbing and secret redaction**:
-   `build_sanitized_env` forwards only allowlisted environment variables (`passthrough_env_keys`) to the subprocess, and all stdout/stderr/error fields pass through `redact_secrets` before entering `ExecutionResult` or `Evidence`.
+2. **Least-privilege toolsets and role restrictions**:
+   - `HermesCliRuntimeAdapter` enforces `require_explicit_toolsets=True` by default: every invocation must resolve an explicit `--toolsets` allowlist (from `request.allowed_tools`, `config.default_toolsets`, or per-role defaults `role_toolsets`), preventing Hermes from falling back to broad user-level CLI toolsets when `--toolsets` is omitted.
+   - Wildcard toolsets (`--toolsets all` or `--toolsets *`) and wildcard/unapproved skills are rejected (`INVALID_HERMES_REQUEST`).
+   - Role-scoped toolset ceilings (`implementer`, `checker`, `reviewer` restricted to `read_file`, `qa` restricted to `read_file,pytest`) prevent privilege escalation across roles.
+3. **Workspace path validation and minimal environment**:
+   - `workdir` is validated against path traversal (`..`) and optional `allowed_workdir_roots`.
+   - `build_sanitized_env` forwards only non-secret system environment keys (`passthrough_env_keys`) by default; provider API keys are never forwarded unless explicitly listed in `secret_env_keys`, and all stdout/stderr/error fields pass through `redact_secrets` before entering `ExecutionResult` or `Evidence`.
 4. **Cancellation and timeouts**:
    - Subprocess timeout (`request.timeout_seconds`) maps to `RunStatus.TIMED_OUT`.
    - Exit code `130` (`_INTERRUPTED_EXIT_CODE`) or `"interrupted": true` in the usage report maps to `RunStatus.CANCELLED`.
