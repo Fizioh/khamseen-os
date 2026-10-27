@@ -139,6 +139,53 @@ def check_secrets(files: list[Path]) -> list[str]:
     return errors
 
 
+_USES_ACTION_RE = re.compile(r"^\s*-\s*uses:\s*([^\s#]+)|^\s*uses:\s*([^\s#]+)", re.MULTILINE)
+_PINNED_SHA_RE = re.compile(r"^[^@]+@[0-9a-f]{40}$")
+_DANGEROUS_WORKFLOW_TRIGGERS: tuple[str, ...] = (
+    "pull_request_target",
+    "workflow_run",
+    "issue_comment",
+)
+
+
+def check_workflow_security() -> list[str]:
+    errors: list[str] = []
+    workflows_dir = _REPO_ROOT / ".github" / "workflows"
+    if not workflows_dir.is_dir():
+        errors.append("Missing .github/workflows directory")
+        return errors
+
+    codeowners_path = _REPO_ROOT / ".github" / "CODEOWNERS"
+    if not codeowners_path.is_file():
+        errors.append("Missing .github/CODEOWNERS file")
+
+    dependabot_path = _REPO_ROOT / ".github" / "dependabot.yml"
+    if not dependabot_path.is_file():
+        errors.append("Missing .github/dependabot.yml file")
+
+    for wf_path in sorted(workflows_dir.glob("*.y*ml")):
+        rel = wf_path.relative_to(_REPO_ROOT)
+        text = wf_path.read_text(encoding="utf-8", errors="replace")
+        if "permissions:" not in text or "contents: read" not in text:
+            errors.append(f"{rel}: workflow must declare least-privilege 'permissions: contents: read'")
+        if "persist-credentials: false" not in text:
+            errors.append(f"{rel}: checkout step must set 'persist-credentials: false'")
+        if "self-hosted" in text:
+            errors.append(f"{rel}: self-hosted runners are prohibited for public repository workflows")
+        for trigger in _DANGEROUS_WORKFLOW_TRIGGERS:
+            if re.search(rf"\b{trigger}\s*:", text):
+                errors.append(
+                    f"{rel}: dangerous trigger '{trigger}' is prohibited on untrusted PRs/comments"
+                )
+        for match in _USES_ACTION_RE.finditer(text):
+            action_ref = (match.group(1) or match.group(2) or "").strip()
+            if action_ref and not action_ref.startswith("./") and not _PINNED_SHA_RE.match(action_ref):
+                errors.append(
+                    f"{rel}: GitHub Action '{action_ref}' must be pinned to a full 40-char commit SHA"
+                )
+    return errors
+
+
 def check_manifests() -> list[str]:
     errors: list[str] = []
     manifest_path = _REPO_ROOT / "examples" / "engineering-loop" / "module-manifest.json"
@@ -160,6 +207,7 @@ def main() -> int:
     errors: list[str] = []
     errors.extend(check_license())
     errors.extend(check_dependency_hygiene())
+    errors.extend(check_workflow_security())
     errors.extend(check_manifests())
     errors.extend(check_markdown_links(files))
     errors.extend(check_secrets(files))
