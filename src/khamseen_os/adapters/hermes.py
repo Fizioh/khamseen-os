@@ -109,6 +109,11 @@ class HermesCliRuntimeAdapter:
         return True
 
     def _resolve_toolsets(self, request: ExecutionRequest) -> tuple[str, ...]:
+        for item in request.allowed_tools or self.config.default_toolsets:
+            if not self.config.allow_wildcard_toolsets and item.strip().lower() in _WILDCARD_TOOLSETS:
+                raise ValueError(
+                    f"Wildcard Hermes toolset '{item}' is prohibited by adapter policy"
+                )
         role_allowed = self.config.role_toolsets.get(request.agent_role)
         if request.allowed_tools:
             if role_allowed is not None:
