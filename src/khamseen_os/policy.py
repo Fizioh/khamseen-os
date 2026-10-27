@@ -40,6 +40,7 @@ ALLOWED_STAGE_TRANSITIONS: dict[LifecycleStage, frozenset[LifecycleStage]] = {
         {
             LifecycleStage.CHECK,
             LifecycleStage.REMEDIATE,
+            LifecycleStage.HUMAN_APPROVAL,
             LifecycleStage.FAILED,
             LifecycleStage.ESCALATED,
         }
@@ -193,7 +194,7 @@ class PolicyEngine:
         candidate_run: Run,
         prior_runs: tuple[Run, ...] = (),
         approvals: tuple[ApprovalRecord, ...] = (),
-        require_pre_run_approval: bool = False,
+        require_pre_run_approval: bool = True,
     ) -> PolicyEvaluation:
         violations: list[str] = []
 
@@ -241,18 +242,28 @@ class PolicyEngine:
             )
 
         if require_pre_run_approval and (task.requires_human_approval or task.sensitive_actions):
+            if any(
+                a.task_id == task.task_id and not a.verify_integrity() for a in approvals
+            ):
+                return PolicyEvaluation(
+                    decision=PolicyDecision.DENY,
+                    reason="Forged or unverified human approval record rejected",
+                    violated_rules=("forged_or_unverified_approval",),
+                    requires_approval_for=task.sensitive_actions or ("sensitive_task",),
+                )
+            if any(a.status == ApprovalStatus.REJECTED for a in approvals if a.task_id == task.task_id):
+                return PolicyEvaluation(
+                    decision=PolicyDecision.DENY,
+                    reason="Human authority explicitly rejected sensitive task execution",
+                    violated_rules=("human_approval_rejected",),
+                    requires_approval_for=task.sensitive_actions or ("sensitive_task",),
+                )
             if not self._has_valid_human_approval(
                 task=task,
                 approvals=approvals,
                 disallowed_actor_ids={candidate_run.agent_id},
+                required_scopes=candidate_run.requested_scopes or task.allowed_scopes,
             ):
-                if any(a.status == ApprovalStatus.REJECTED for a in approvals if a.task_id == task.task_id):
-                    return PolicyEvaluation(
-                        decision=PolicyDecision.DENY,
-                        reason="Human authority explicitly rejected sensitive task execution",
-                        violated_rules=("human_approval_rejected",),
-                        requires_approval_for=task.sensitive_actions or ("sensitive_task",),
-                    )
                 return PolicyEvaluation(
                     decision=PolicyDecision.HUMAN_REQUIRED,
                     reason="Sensitive action requires explicit human approval before execution",
@@ -334,6 +345,18 @@ class PolicyEngine:
                     or latest_matching.producer_role != "reviewer"
                 ):
                     violations.append("implementer_reviewer_separation_violation")
+            elif required_kind == EvidenceKind.DETERMINISTIC_CHECK:
+                if (
+                    latest_matching.producer_id == implementer_run.agent_id
+                    or latest_matching.producer_role != "checker"
+                ):
+                    violations.append("invalid_checker_evidence_producer")
+            elif required_kind == EvidenceKind.QA_VERIFICATION:
+                if (
+                    latest_matching.producer_id == implementer_run.agent_id
+                    or latest_matching.producer_role != "qa"
+                ):
+                    violations.append("invalid_qa_evidence_producer")
 
         if not task.required_evidence and implementer_run.claimed_success and not valid_evidence:
             violations.append("unverified_agent_completion_claim")
@@ -346,6 +369,15 @@ class PolicyEngine:
             )
 
         if task.requires_human_approval or task.sensitive_actions:
+            if any(
+                a.task_id == task.task_id and not a.verify_integrity() for a in approvals
+            ):
+                return PolicyEvaluation(
+                    decision=PolicyDecision.DENY,
+                    reason="Forged or unverified human approval record rejected",
+                    violated_rules=("forged_or_unverified_approval",),
+                    requires_approval_for=task.sensitive_actions or ("sensitive_task",),
+                )
             if any(a.status == ApprovalStatus.REJECTED for a in approvals if a.task_id == task.task_id):
                 return PolicyEvaluation(
                     decision=PolicyDecision.DENY,
@@ -357,6 +389,7 @@ class PolicyEngine:
                 task=task,
                 approvals=approvals,
                 disallowed_actor_ids={implementer_run.agent_id},
+                required_scopes=implementer_run.requested_scopes or task.allowed_scopes,
             ):
                 return PolicyEvaluation(
                     decision=PolicyDecision.HUMAN_REQUIRED,
@@ -403,13 +436,30 @@ class PolicyEngine:
         task: Task,
         approvals: tuple[ApprovalRecord, ...],
         disallowed_actor_ids: set[str],
+        required_scopes: tuple[str, ...] = (),
     ) -> bool:
+        non_human_prefixes = ("agent_", "system_", "bot_")
+        required_actions = set(task.sensitive_actions)
+        scope_set = set(required_scopes)
+
         for approval in approvals:
+            approver = approval.approver_id.strip()
             if (
-                approval.task_id == task.task_id
-                and approval.status == ApprovalStatus.APPROVED
-                and approval.approver_id not in disallowed_actor_ids
-                and bool(approval.approver_id.strip())
+                approval.task_id != task.task_id
+                or approval.status != ApprovalStatus.APPROVED
+                or not approval.verify_integrity()
+                or not approver
+                or approver in disallowed_actor_ids
+                or approver.lower().startswith(non_human_prefixes)
             ):
-                return True
+                continue
+            if required_actions:
+                if not approval.approved_actions or not required_actions.issubset(
+                    set(approval.approved_actions)
+                ):
+                    continue
+            if approval.approved_scopes and scope_set:
+                if not scope_set.issubset(set(approval.approved_scopes)):
+                    continue
+            return True
         return False

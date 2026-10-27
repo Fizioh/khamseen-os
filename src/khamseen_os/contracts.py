@@ -228,15 +228,71 @@ class Evidence:
         return bool(self.verified and self.content_hash == expected)
 
 
+def compute_approval_hash(
+    task_id: str,
+    approver_id: str,
+    status: ApprovalStatus,
+    reason: str,
+    approved_actions: tuple[str, ...],
+    approved_scopes: tuple[str, ...],
+    run_id: str | None,
+) -> str:
+    canonical = json.dumps(
+        {
+            "task_id": task_id,
+            "approver_id": approver_id,
+            "status": status.value,
+            "reason": reason,
+            "approved_actions": list(approved_actions),
+            "approved_scopes": list(approved_scopes),
+            "run_id": run_id,
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+
 @dataclass(frozen=True)
 class ApprovalRecord:
     task_id: str
     approver_id: str
     status: ApprovalStatus
     reason: str
+    approved_actions: tuple[str, ...] = ()
+    approved_scopes: tuple[str, ...] = ()
+    verified: bool = True
     run_id: str | None = None
     approval_id: str = field(default_factory=lambda: new_id("apr"))
+    content_hash: str = ""
     created_at: str = field(default_factory=utc_now_iso)
+
+    def __post_init__(self) -> None:
+        sanitized_reason = redact_secrets(self.reason)
+        object.__setattr__(self, "reason", sanitized_reason)
+        if not self.content_hash:
+            digest = compute_approval_hash(
+                task_id=self.task_id,
+                approver_id=self.approver_id,
+                status=self.status,
+                reason=sanitized_reason,
+                approved_actions=self.approved_actions,
+                approved_scopes=self.approved_scopes,
+                run_id=self.run_id,
+            )
+            object.__setattr__(self, "content_hash", digest)
+
+    def verify_integrity(self) -> bool:
+        expected = compute_approval_hash(
+            task_id=self.task_id,
+            approver_id=self.approver_id,
+            status=self.status,
+            reason=self.reason,
+            approved_actions=self.approved_actions,
+            approved_scopes=self.approved_scopes,
+            run_id=self.run_id,
+        )
+        return bool(self.verified and self.content_hash == expected)
 
 
 @dataclass(frozen=True)

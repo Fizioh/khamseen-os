@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -37,6 +38,9 @@ class WorkflowOutcome:
     final_decision: PolicyEvaluation | None = None
 
 
+StageVerifier = Callable[[Task, Run, ExecutionResult], tuple[Evidence, ...]]
+
+
 class EngineeringWorkflowRunner:
     """Executes the bounded REQUEST -> IMPLEMENT -> CHECK -> REVIEW -> REMEDIATE -> QA -> DONE pipeline."""
 
@@ -48,6 +52,7 @@ class EngineeringWorkflowRunner:
         checker_id: str = "system_deterministic_checker",
         reviewer_id: str = "agent_independent_reviewer",
         qa_id: str = "system_qa_gate",
+        stage_verifiers: dict[LifecycleStage, StageVerifier] | None = None,
     ) -> None:
         if implementer_id == reviewer_id:
             raise ValueError("Implementer and independent reviewer must have distinct agent IDs")
@@ -57,6 +62,7 @@ class EngineeringWorkflowRunner:
         self.checker_id = checker_id
         self.reviewer_id = reviewer_id
         self.qa_id = qa_id
+        self.stage_verifiers: dict[LifecycleStage, StageVerifier] = dict(stage_verifiers or {})
         self._processed_event_keys: set[str] = set()
 
     def run_workflow(
@@ -65,8 +71,10 @@ class EngineeringWorkflowRunner:
         approvals: tuple[ApprovalRecord, ...] = (),
         requested_tools: tuple[str, ...] = (),
         requested_scopes: tuple[str, ...] = (),
-        emit_default_stage_evidence: bool = True,
+        emit_default_stage_evidence: bool | None = None,
     ) -> WorkflowOutcome:
+        ignore_runtime_stage_evidence = emit_default_stage_evidence is False
+        emit_illustrative = emit_default_stage_evidence is True
         outcome = WorkflowOutcome(task=task, approvals=list(approvals))
         self._emit_event(
             outcome=outcome,
@@ -105,7 +113,28 @@ class EngineeringWorkflowRunner:
                 candidate_run=impl_run,
                 prior_runs=tuple(outcome.runs),
                 approvals=tuple(outcome.approvals),
+                require_pre_run_approval=True,
             )
+            if pre_eval.decision == PolicyDecision.HUMAN_REQUIRED:
+                transition_run_status(impl_run, RunStatus.REJECTED)
+                outcome.runs.append(impl_run)
+                outcome.final_decision = pre_eval
+                transition_task_stage(task, LifecycleStage.HUMAN_APPROVAL)
+                transition_task_status(task, TaskStatus.WAITING_APPROVAL)
+                self._emit_event(
+                    outcome=outcome,
+                    event_type="task.human_approval_required",
+                    stage=task.stage,
+                    actor_id="policy_engine",
+                    run_id=impl_run.run_id,
+                    payload={
+                        "reason": pre_eval.reason,
+                        "requires_approval_for": list(pre_eval.requires_approval_for),
+                    },
+                    dedup_key=f"{task.task_id}:{impl_run.run_id}:pre_run_approval_required",
+                )
+                return outcome
+
             if pre_eval.decision != PolicyDecision.ALLOW:
                 transition_run_status(impl_run, RunStatus.REJECTED)
                 outcome.runs.append(impl_run)
@@ -117,8 +146,9 @@ class EngineeringWorkflowRunner:
                 outcome=outcome,
                 task=task,
                 run=impl_run,
-                emit_default_evidence=emit_default_stage_evidence,
+                emit_default_evidence=emit_illustrative,
                 default_evidence_kind=EvidenceKind.IMPLEMENTATION_ARTIFACT,
+                ignore_runtime_stage_evidence=ignore_runtime_stage_evidence,
             )
 
             post_eval = self.policy_engine.evaluate_post_run(
@@ -142,7 +172,8 @@ class EngineeringWorkflowRunner:
                 actor_id=self.checker_id,
                 actor_role="checker",
                 evidence_kind=EvidenceKind.DETERMINISTIC_CHECK,
-                emit_default_evidence=emit_default_stage_evidence,
+                emit_default_evidence=emit_illustrative,
+                ignore_runtime_stage_evidence=ignore_runtime_stage_evidence,
             )
             if not check_ok:
                 if not self._try_enter_remediation(outcome, impl_run.run_id, check_reason):
@@ -158,7 +189,8 @@ class EngineeringWorkflowRunner:
                 actor_id=self.reviewer_id,
                 actor_role="reviewer",
                 evidence_kind=EvidenceKind.INDEPENDENT_REVIEW,
-                emit_default_evidence=emit_default_stage_evidence,
+                emit_default_evidence=emit_illustrative,
+                ignore_runtime_stage_evidence=ignore_runtime_stage_evidence,
             )
             if not review_ok:
                 if not self._try_enter_remediation(outcome, impl_run.run_id, review_reason):
@@ -174,7 +206,8 @@ class EngineeringWorkflowRunner:
                 actor_id=self.qa_id,
                 actor_role="qa",
                 evidence_kind=EvidenceKind.QA_VERIFICATION,
-                emit_default_evidence=emit_default_stage_evidence,
+                emit_default_evidence=emit_illustrative,
+                ignore_runtime_stage_evidence=ignore_runtime_stage_evidence,
             )
             if not qa_ok:
                 if not self._try_enter_remediation(outcome, impl_run.run_id, qa_reason):
@@ -297,6 +330,7 @@ class EngineeringWorkflowRunner:
         run: Run,
         emit_default_evidence: bool,
         default_evidence_kind: EvidenceKind,
+        ignore_runtime_stage_evidence: bool = False,
     ) -> ExecutionResult:
         transition_run_status(run, RunStatus.RUNNING)
         request = ExecutionRequest(
@@ -324,9 +358,17 @@ class EngineeringWorkflowRunner:
         run.external_run_id = result.external_session_id
         outcome.runs.append(run)
 
-        if result.evidence:
+        if result.evidence and not ignore_runtime_stage_evidence:
             outcome.evidence.extend(result.evidence)
-        has_stage_evidence = any(ev.kind == default_evidence_kind for ev in result.evidence)
+        elif result.evidence and ignore_runtime_stage_evidence:
+            outcome.evidence.extend(
+                ev for ev in result.evidence if ev.kind == EvidenceKind.USAGE_REPORT
+            )
+        if run.stage in self.stage_verifiers and not ignore_runtime_stage_evidence:
+            outcome.evidence.extend(self.stage_verifiers[run.stage](task, run, result))
+        has_stage_evidence = any(
+            ev.run_id == run.run_id and ev.kind == default_evidence_kind for ev in outcome.evidence
+        )
         if emit_default_evidence and result.status == RunStatus.SUCCEEDED and not has_stage_evidence:
             outcome.evidence.append(
                 Evidence(
@@ -336,9 +378,9 @@ class EngineeringWorkflowRunner:
                     producer_id=run.agent_id,
                     producer_role=run.agent_role,
                     passed=True,
-                    verified=True,
-                    summary=result.output_text or f"{run.stage.value} stage succeeded",
-                    details={"attempt": run.attempt, "stage": run.stage.value},
+                    verified=False,
+                    summary=result.output_text or f"{run.stage.value} illustrative stage output",
+                    details={"attempt": run.attempt, "stage": run.stage.value, "illustrative": True},
                 )
             )
 
@@ -367,6 +409,7 @@ class EngineeringWorkflowRunner:
         actor_role: str,
         evidence_kind: EvidenceKind,
         emit_default_evidence: bool,
+        ignore_runtime_stage_evidence: bool = False,
     ) -> tuple[bool, str]:
         stage_run = Run(
             task_id=task.task_id,
@@ -383,6 +426,7 @@ class EngineeringWorkflowRunner:
             run=stage_run,
             emit_default_evidence=emit_default_evidence,
             default_evidence_kind=evidence_kind,
+            ignore_runtime_stage_evidence=ignore_runtime_stage_evidence,
         )
         if result.status != RunStatus.SUCCEEDED:
             return False, result.error_message or f"{stage.value} execution failed"
@@ -392,9 +436,16 @@ class EngineeringWorkflowRunner:
             for ev in outcome.evidence
             if ev.run_id == stage_run.run_id and ev.kind == evidence_kind
         ]
-        if stage_evidence and not all(ev.passed and ev.verify_integrity() for ev in stage_evidence):
+        if not stage_evidence:
+            return True, f"{stage.value} completed without verified evidence (pending completion gate)"
+        if not all(ev.passed for ev in stage_evidence):
             failed_summaries = [ev.summary for ev in stage_evidence if not ev.passed]
-            return False, "; ".join(failed_summaries) or f"{stage.value} findings rejected attempt"
+            return (
+                False,
+                "; ".join(failed_summaries) or f"{stage.value} findings rejected attempt",
+            )
+        if not all(ev.verify_integrity() for ev in stage_evidence):
+            return True, f"{stage.value} produced unverified evidence (pending completion gate)"
 
         return True, f"{stage.value} passed"
 
