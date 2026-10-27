@@ -2,12 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
 import time
 from collections.abc import Callable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
@@ -23,6 +24,14 @@ from khamseen_os.contracts import (
 
 _INTERRUPTED_EXIT_CODE = 130
 _WILDCARD_TOOLSETS: frozenset[str] = frozenset({"all", "*"})
+_SAFE_TOKEN_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
+
+_DEFAULT_ROLE_TOOLSETS: dict[str, tuple[str, ...]] = {
+    "implementer": ("read_file", "pytest", "ruff"),
+    "checker": ("read_file", "pytest", "ruff"),
+    "reviewer": ("read_file",),
+    "qa": ("read_file", "pytest"),
+}
 
 _DEFAULT_PASSTHROUGH_ENV_KEYS: tuple[str, ...] = (
     "PATH",
@@ -36,10 +45,6 @@ _DEFAULT_PASSTHROUGH_ENV_KEYS: tuple[str, ...] = (
     "TMPDIR",
     "HERMES_HOME",
     "HERMES_INFERENCE_MODEL",
-    "OPENROUTER_API_KEY",
-    "ANTHROPIC_API_KEY",
-    "OPENAI_API_KEY",
-    "NOUS_API_KEY",
 )
 
 
@@ -65,9 +70,16 @@ class HermesAdapterConfig:
     provider: str | None = None
     reasoning: str | None = None
     default_toolsets: tuple[str, ...] = ()
+    role_toolsets: dict[str, tuple[str, ...]] = field(
+        default_factory=lambda: dict(_DEFAULT_ROLE_TOOLSETS)
+    )
     default_skills: tuple[str, ...] = ()
+    allowed_skills: tuple[str, ...] = ()
+    require_explicit_toolsets: bool = True
     allow_wildcard_toolsets: bool = False
+    allowed_workdir_roots: tuple[str, ...] = ()
     passthrough_env_keys: tuple[str, ...] = _DEFAULT_PASSTHROUGH_ENV_KEYS
+    secret_env_keys: tuple[str, ...] = ()
 
 
 class HermesCliRuntimeAdapter:
@@ -96,14 +108,68 @@ class HermesCliRuntimeAdapter:
         self.cancelled_run_ids.add(run_id)
         return True
 
-    def build_command(self, request: ExecutionRequest, usage_file_path: Path) -> list[str]:
-        toolsets = request.allowed_tools or self.config.default_toolsets
-        if not self.config.allow_wildcard_toolsets:
-            for item in toolsets:
-                if item.strip().lower() in _WILDCARD_TOOLSETS:
+    def _resolve_toolsets(self, request: ExecutionRequest) -> tuple[str, ...]:
+        role_allowed = self.config.role_toolsets.get(request.agent_role)
+        if request.allowed_tools:
+            if role_allowed is not None:
+                disallowed = [t for t in request.allowed_tools if t not in role_allowed]
+                if disallowed:
                     raise ValueError(
-                        f"Wildcard Hermes toolset '{item}' is prohibited by adapter policy"
+                        f"Role '{request.agent_role}' is not permitted to use tools: {', '.join(disallowed)}"
                     )
+            return request.allowed_tools
+        if self.config.default_toolsets:
+            return self.config.default_toolsets
+        if role_allowed:
+            return role_allowed
+        return ()
+
+    def _validate_workdir(self, workdir: str) -> str:
+        raw_parts = Path(workdir).parts
+        if ".." in raw_parts:
+            raise ValueError(f"Path traversal ('..') is prohibited in Hermes workdir '{workdir}'")
+        if self.config.allowed_workdir_roots:
+            resolved_target = Path(workdir).resolve()
+            allowed_roots = [Path(root).resolve() for root in self.config.allowed_workdir_roots]
+            if not any(
+                resolved_target == root or root in resolved_target.parents for root in allowed_roots
+            ):
+                raise ValueError(
+                    f"Hermes workdir '{workdir}' is outside allowed_workdir_roots"
+                )
+        return workdir
+
+    def build_command(self, request: ExecutionRequest, usage_file_path: Path) -> list[str]:
+        if "\x00" in request.prompt or not request.prompt.strip():
+            raise ValueError("Invalid or empty Hermes prompt")
+
+        toolsets = self._resolve_toolsets(request)
+        if self.config.require_explicit_toolsets and not toolsets:
+            raise ValueError(
+                "Empty Hermes toolset allowlist is prohibited by least-privilege policy"
+            )
+
+        for item in toolsets:
+            cleaned = item.strip()
+            if not self.config.allow_wildcard_toolsets and cleaned.lower() in _WILDCARD_TOOLSETS:
+                raise ValueError(
+                    f"Wildcard Hermes toolset '{item}' is prohibited by adapter policy"
+                )
+            if cleaned.lower() not in _WILDCARD_TOOLSETS and not _SAFE_TOKEN_RE.match(cleaned):
+                raise ValueError(f"Malformed Hermes toolset identifier '{item}'")
+
+        skills = request.allowed_skills or self.config.default_skills
+        for skill in skills:
+            cleaned_skill = skill.strip()
+            if cleaned_skill.lower() in _WILDCARD_TOOLSETS or not _SAFE_TOKEN_RE.match(
+                cleaned_skill
+            ):
+                raise ValueError(f"Wildcard or malformed Hermes skill '{skill}' is prohibited")
+            if self.config.allowed_skills and cleaned_skill not in self.config.allowed_skills:
+                raise ValueError(f"Hermes skill '{skill}' is not in allowed_skills")
+
+        if self.config.profile and not _SAFE_TOKEN_RE.match(self.config.profile):
+            raise ValueError(f"Invalid Hermes profile name '{self.config.profile}'")
 
         argv: list[str] = [self.config.binary]
         if self.config.profile:
@@ -116,14 +182,15 @@ class HermesCliRuntimeAdapter:
             argv.extend(["--reasoning", self.config.reasoning])
         if toolsets:
             argv.extend(["--toolsets", ",".join(toolsets)])
-
-        skills = request.allowed_skills or self.config.default_skills
         if skills:
             argv.extend(["--skills", ",".join(skills)])
         if request.resume_session_id:
+            if not _SAFE_TOKEN_RE.match(request.resume_session_id):
+                raise ValueError(f"Invalid resume_session_id '{request.resume_session_id}'")
             argv.extend(["--resume", request.resume_session_id])
         if request.workdir:
-            argv.extend(["--in", request.workdir])
+            validated_workdir = self._validate_workdir(request.workdir)
+            argv.extend(["--in", validated_workdir])
 
         argv.extend(["--oneshot", request.prompt, "--usage-file", str(usage_file_path)])
         return argv
@@ -135,7 +202,8 @@ class HermesCliRuntimeAdapter:
     ) -> dict[str, str]:
         source = base_env if base_env is not None else os.environ
         env: dict[str, str] = {}
-        for key in self.config.passthrough_env_keys:
+        allowed_keys = (*self.config.passthrough_env_keys, *self.config.secret_env_keys)
+        for key in allowed_keys:
             if key in source:
                 env[key] = source[key]
         env["KHAMSEEN_TASK_ID"] = request.task_id
