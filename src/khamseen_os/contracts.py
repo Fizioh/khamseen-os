@@ -14,6 +14,8 @@ _SECRET_PATTERNS: tuple[re.Pattern[str], ...] = (
     re.compile(r"(gh[pousr]_[A-Za-z0-9_]{16,})"),
     re.compile(r"(AKIA[0-9A-Z]{16})"),
     re.compile(r"(xox[baprs]-[A-Za-z0-9\-]{10,})"),
+    re.compile(r"(github_pat_[A-Za-z0-9_]{22,})"),
+    re.compile(r"(Bearer\s+eyJ[A-Za-z0-9_\-\.]+)"),
     re.compile(
         r"(?i)((?:api[_-]?key|secret|token|password|authorization)\s*[:=]\s*['\"]?)([^\s'\",;]{6,})"
     ),
