@@ -4,7 +4,8 @@ import hashlib
 import json
 import re
 import uuid
-from dataclasses import dataclass, field
+from collections.abc import Sequence
+from dataclasses import asdict, dataclass, field
 from datetime import UTC, datetime
 from enum import Enum
 from typing import Any, Protocol, runtime_checkable
@@ -406,6 +407,15 @@ class AuditEvent:
 
     def __post_init__(self) -> None:
         object.__setattr__(self, "payload", redact_mapping(self.payload))
+
+
+def serialize_events_jsonl(events: Sequence[AuditEvent]) -> str:
+    """Serialize audit events as sorted-key JSON records, one per line.
+
+    Empty input produces an empty string. Nonempty output ends with a newline;
+    payload redaction already performed by AuditEvent is preserved.
+    """
+    return "".join(json.dumps(asdict(event), sort_keys=True) + "\n" for event in events)
 
 
 @runtime_checkable

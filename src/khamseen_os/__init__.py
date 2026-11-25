@@ -30,6 +30,7 @@ from khamseen_os.contracts import (
     UsageMetrics,
     redact_mapping,
     redact_secrets,
+    serialize_events_jsonl,
 )
 from khamseen_os.loop import EngineeringWorkflowRunner, WorkflowOutcome
 from khamseen_os.manifest import (
@@ -93,6 +94,7 @@ __all__ = [
     "load_and_validate_manifest",
     "redact_mapping",
     "redact_secrets",
+    "serialize_events_jsonl",
     "transition_run_status",
     "transition_task_stage",
     "transition_task_status",
