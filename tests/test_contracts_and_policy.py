@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import json
+
 import pytest
 
 from khamseen_os import (
     ApprovalRecord,
     ApprovalStatus,
+    AuditEvent,
     BudgetSpec,
     EngineeringWorkflowRunner,
     Evidence,
@@ -21,6 +24,7 @@ from khamseen_os import (
     TaskStatus,
     UnsafeStateTransitionError,
     UsageMetrics,
+    serialize_events_jsonl,
     transition_run_status,
     transition_task_stage,
     transition_task_status,
@@ -264,3 +268,67 @@ def test_human_approval_gate_pauses_and_completes_when_approved() -> None:
     assert outcome_approved.task.status == TaskStatus.COMPLETED
     assert outcome_approved.final_decision is not None
     assert outcome_approved.final_decision.decision == PolicyDecision.ALLOW
+
+
+@pytest.mark.parametrize("container", [list, tuple])
+def test_serialize_events_jsonl_preserves_events_and_redaction(container: type) -> None:
+    events = container(
+        [
+            AuditEvent(
+                task_id="task_export",
+                correlation_id="corr_export",
+                event_type="stage_changed",
+                stage=LifecycleStage.IMPLEMENT,
+                actor_id="worker",
+                run_id="run_export",
+                payload={
+                    "token": "sensitive-value",
+                    "nested": {"password": "another-value"},
+                    "message": "first line\nsecond line",
+                    "count": 2,
+                },
+                event_id="evt_first",
+                created_at="2026-11-25T00:00:00+00:00",
+            ),
+            AuditEvent(
+                task_id="task_export",
+                correlation_id="corr_export",
+                event_type="checked",
+                stage=LifecycleStage.CHECK,
+                actor_id="checker",
+                event_id="evt_second",
+                created_at="2026-11-25T00:00:01+00:00",
+            ),
+        ]
+    )
+    output = serialize_events_jsonl(events)
+    lines = output.splitlines()
+    assert len(lines) == 2
+    records = [json.loads(line) for line in lines]
+    assert [record["event_id"] for record in records] == ["evt_first", "evt_second"]
+    assert records[0] == {
+        "task_id": "task_export",
+        "correlation_id": "corr_export",
+        "event_type": "stage_changed",
+        "stage": "IMPLEMENT",
+        "actor_id": "worker",
+        "run_id": "run_export",
+        "event_id": "evt_first",
+        "created_at": "2026-11-25T00:00:00+00:00",
+        "payload": {
+            "token": "[REDACTED]",
+            "nested": {"password": "[REDACTED]"},
+            "message": "first line\nsecond line",
+            "count": 2,
+        },
+    }
+    assert records[1]["run_id"] is None
+    assert records[1]["payload"] == {}
+    assert all(line == json.dumps(record, sort_keys=True) for line, record in zip(lines, records, strict=True))
+    assert "sensitive-value" not in output
+    assert "another-value" not in output
+    assert events[0].payload["token"] == "[REDACTED]"
+
+
+def test_serialize_events_jsonl_empty() -> None:
+    assert serialize_events_jsonl([]) == ""
